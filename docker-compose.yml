@@ -1,6 +1,17 @@
 version: "3"
 
 services:
+  discovery:
+    container_name: discovery
+    build:
+      context: .
+      dockerfile: ./dockerfiles/discovery.Dockerfile
+    environment:
+      - SOCKET_PORT=8080
+    networks:
+      static-network:
+        ipv4_address: 172.20.128.2
+
   node-1:
     container_name: node-1
     build:
@@ -15,16 +26,33 @@ services:
       static-network:
         ipv4_address: 172.20.128.3
 
-  discovery:
-    container_name: discovery
+  node-2:
+    container_name: node-2
     build:
       context: .
-      dockerfile: ./dockerfiles/discovery.Dockerfile
+      dockerfile: ./dockerfiles/node.Dockerfile
+    depends_on:
+      discovery:
+        condition: service_started
     environment:
       - SOCKET_PORT=8080
     networks:
       static-network:
-        ipv4_address: 172.20.128.2
+        ipv4_address: 172.20.128.4
+
+  node-3:
+    container_name: node-3
+    build:
+      context: .
+      dockerfile: ./dockerfiles/node.Dockerfile
+    depends_on:
+      discovery:
+        condition: service_started
+    environment:
+      - SOCKET_PORT=8080
+    networks:
+      static-network:
+        ipv4_address: 172.20.128.5
 
 networks:
   static-network:
