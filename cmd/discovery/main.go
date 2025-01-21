@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
 
 	"github.com/hn275/dist-db/internal"
@@ -14,7 +15,7 @@ func main() {
 	}
 	defer soc.Close()
 
-	fmt.Println("Local socket address", soc.Addr())
+	log.Println("Local socket address", soc.Addr())
 	for {
 		conn, err := soc.Accept()
 		if err != nil {
@@ -29,5 +30,15 @@ func main() {
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	fmt.Println("Connection established:", conn.LocalAddr())
+	log.Println("Connection established:", conn.LocalAddr())
+	buf := make([]byte, 128)
+	n, err := conn.Read(buf)
+	if err != nil {
+		panic(err)
+	}
+
+	log.Printf("from host [%s], message [%s]\n", conn.RemoteAddr().String(), string(buf[:n]))
+	if _, err := conn.Write([]byte("sent from discovery")); err != nil {
+		panic(err)
+	}
 }
