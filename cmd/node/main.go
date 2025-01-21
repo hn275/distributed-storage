@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net"
 )
 
@@ -11,7 +12,15 @@ func main() {
 	}
 	defer conn.Close()
 
-	if _, err := conn.Write([]byte("Hello, World!")); err != nil {
+	if _, err := conn.Write([]byte("sent from node")); err != nil {
 		panic(err)
 	}
+
+	buf := make([]byte, 128)
+	n, err := conn.Read(buf)
+	if err != nil {
+		panic(err)
+	}
+
+	log.Printf("from host [%s], message [%s]\n", conn.RemoteAddr().String(), string(buf[:n]))
 }

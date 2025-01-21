@@ -6,15 +6,16 @@ services:
     build:
       context: .
       dockerfile: ./dockerfiles/node.Dockerfile
+    depends_on:
+      discovery:
+        condition: service_started
     environment:
       - SOCKET_PORT=8080
-    # stdin_open: true # same as docker run -i
-    # tty: true # same as docker run -t
     networks:
       static-network:
         ipv4_address: 172.20.128.3
 
-  node-2:
+  discovery:
     container_name: discovery
     build:
       context: .
