@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"net"
 )
 
@@ -12,6 +12,7 @@ func main() {
 	}
 	defer conn.Close()
 
+	slog.Info("socket opened", "addr", conn.RemoteAddr())
 	if _, err := conn.Write([]byte("sent from node")); err != nil {
 		panic(err)
 	}
@@ -22,5 +23,5 @@ func main() {
 		panic(err)
 	}
 
-	log.Printf("from host [%s], message [%s]\n", conn.RemoteAddr().String(), string(buf[:n]))
+	slog.Info("message received", "peer", conn.RemoteAddr(), "data", buf[:n])
 }

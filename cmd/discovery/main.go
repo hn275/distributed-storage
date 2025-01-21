@@ -1,8 +1,7 @@
 package main
 
 import (
-	"fmt"
-	"log"
+	"log/slog"
 	"net"
 
 	"github.com/hn275/dist-db/internal"
@@ -15,12 +14,12 @@ func main() {
 	}
 	defer soc.Close()
 
-	log.Println("Local socket address", soc.Addr())
+	slog.Info("local socket address", "addr", soc.Addr())
 	for {
 		conn, err := soc.Accept()
 		if err != nil {
-			fmt.Printf("Failed to accept connection: %v\n", err)
-			continue
+			slog.Error("failed to accept connection", "err", err)
+			return
 		}
 
 		go handleConnection(conn)
@@ -30,15 +29,16 @@ func main() {
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	log.Println("Connection established:", conn.LocalAddr())
+	slog.Info("connection established", "peer", conn.RemoteAddr())
 	buf := make([]byte, 128)
 	n, err := conn.Read(buf)
 	if err != nil {
 		panic(err)
 	}
 
-	log.Printf("from host [%s], message [%s]\n", conn.RemoteAddr().String(), string(buf[:n]))
 	if _, err := conn.Write([]byte("sent from discovery")); err != nil {
 		panic(err)
 	}
+	slog.Info("message sent", "peer", conn.RemoteAddr(), "data", string(buf[:n]))
+	slog.Info("connection closed", "peer", conn.RemoteAddr())
 }
