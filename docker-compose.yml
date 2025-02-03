@@ -1,5 +1,3 @@
-version: "3"
-
 services:
   discovery:
     container_name: discovery
@@ -20,6 +18,8 @@ services:
     depends_on:
       discovery:
         condition: service_started
+    cap_add:
+      - NET_ADMIN
     environment:
       - SOCKET_PORT=8080
     networks:
