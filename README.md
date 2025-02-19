@@ -3,13 +3,42 @@
 An ongoing reseach project, focusing on perfomance analysis of various load
 balancing techniques in a P2P system.
 
-## Simulation
+# Development
+
+For the demo, we will use Docker and docker-compose to automate the code
+compilation and initialization of the required network topology processes.
+
+For development however, execute the binaries:
 
 ```sh
-docker compose up
+go run ./cmd/<binary>
 ```
 
-## Requirements
+You will likely not have to build the binary before execution, but if needed:
+
+```sh
+go build ./cmd/<binary>
+```
+
+# Simulation
+
+TODO: redo docker compose and update the docs
+
+# Project Directory Structure
+
+| Type             | Path                         |
+| :--------------- | :--------------------------- |
+| Executables      | `./cmd/<binary>/main.go`     |
+| Private packages | `./internal/<binary-name>/`  |
+| Shared packages  | `./internal/<package-name>/` |
+
+## Tests
+
+For any tests you write, put it in the same directory as your code with the
+same filename, with a `_test` suffix before file extension. For ie, the tests
+for the code in `./foo/bar.go` should be in `./foo/bar_test.go`.
+
+# Requirements
 
 - User Interface
   - simple, hard code binary to simulate sending an arbituary number requests.
