@@ -21,14 +21,13 @@ func nodeJoin(lbAddr string) (*DataNode, error) {
 		return nil, err
 	}
 
-	// dial LB node
+	// dial and ping LB, notifying node type
 	lbSoc, err := net.DialTCP(network.ProtoTcp4, laddr, raddr)
 	if err != nil {
 		return nil, err
 	}
 
-	// ping LB node
-	if _, err := lbSoc.Write([]byte("ping")); err != nil {
+	if _, err := lbSoc.Write([]byte{network.DataNodeJoin}); err != nil {
 		return nil, err
 	}
 
