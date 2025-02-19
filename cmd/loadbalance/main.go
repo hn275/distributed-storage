@@ -6,8 +6,8 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"os"
 
+	"github.com/hn275/distributed-storage/internal/loadbalance"
 	"github.com/hn275/distributed-storage/internal/network"
 )
 
@@ -22,33 +22,25 @@ func init() {
 }
 
 func main() {
-	soc, err := net.Listen(network.ProtoTcp4, serverAddr)
+	lbSrv, err := loadbalance.NewBalancer(
+		network.ProtoTcp4,
+		serverAddr,
+		loadbalance.NewSimpleAlgo(),
+	)
 	if err != nil {
-		logger.Error("failed to start node", "err", err)
-		// TODO: define a set of error codes and semantics to share between binaries
-		os.Exit(1)
-		return
+		panic(err)
 	}
 
-	defer soc.Close()
+	defer lbSrv.Close()
 	logger.Info(
 		"node started, waiting for services.",
-		"protocol", soc.Addr().Network(),
-		"address", soc.Addr(),
+		"protocol", lbSrv.Addr().Network(),
+		"address", lbSrv.Addr(),
 	)
-
-	// array buffer to hold all the data nodes in the cluster
-	// TODO: Emily can define this data structure later
-	dataNodes := make(map[net.Addr]net.Conn)
-	go func() {
-		for _, nodeConn := range dataNodes {
-			closeConn(nodeConn)
-		}
-	}()
 
 	var buf [256]byte
 	for {
-		conn, err := soc.Accept()
+		conn, err := lbSrv.Accept()
 		if err != nil {
 			logger.Error("failed to accept new conn.",
 				"peer", conn.RemoteAddr,
@@ -74,7 +66,7 @@ func main() {
 		logger.Info("new connection.", "peer", conn.RemoteAddr())
 		switch buf[0] {
 		case network.DataNodeJoin:
-			dataNodes[conn.RemoteAddr()] = conn
+			lbSrv.Engine.NodeJoin(conn)
 			go serveDataNode(conn)
 			logger.Info("data node joined cluster.", "addr", conn.RemoteAddr())
 
@@ -86,8 +78,11 @@ func main() {
 }
 
 func serveDataNode(conn net.Conn) {
-	// TODO: need a way to remove this connection from the cluster map
-	// when the node leaves the cluster/code exploded
+	defer func() {
+		closeConn(conn)
+		// TODO: need a way to remove this connection from the cluster map
+		// when the node leaves the cluster/code exploded
+	}()
 }
 
 func closeConn(conn net.Conn) {
