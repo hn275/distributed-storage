@@ -2,25 +2,27 @@ package main
 
 import (
 	"net"
+
+	"github.com/hn275/distributed-storage/internal/network"
 )
 
 type DataNode struct {
 	lbSoc net.Conn
 }
 
-func makeDataNode(addr string) (*DataNode, error) {
-	laddr, err := net.ResolveTCPAddr("tcp4", addr)
+func nodeJoin(lbAddr string) (*DataNode, error) {
+	laddr, err := net.ResolveTCPAddr(network.ProtoTcp4, ":0") // randomize the port
 	if err != nil {
 		return nil, err
 	}
 
-	raddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8000")
+	raddr, err := net.ResolveTCPAddr(network.ProtoTcp4, lbAddr)
 	if err != nil {
 		return nil, err
 	}
 
 	// dial LB node
-	lbSoc, err := net.DialTCP("tcp4", laddr, raddr)
+	lbSoc, err := net.DialTCP(network.ProtoTcp4, laddr, raddr)
 	if err != nil {
 		return nil, err
 	}
