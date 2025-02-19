@@ -18,5 +18,4 @@ func NewSimpleAlgo() *SimpleAlgo {
 	return &SimpleAlgo{
 		nodes: map[net.Addr]net.Conn{},
 	}
-
 }
