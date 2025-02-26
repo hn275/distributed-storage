@@ -72,12 +72,15 @@ func main() {
 		case network.DataNodeJoin:
 			if err := lbSrv.NodeJoin(conn); err != nil {
 				slog.Error("failed to join new node", "addr", conn.RemoteAddr())
-				conn.Close()
 				continue
 			}
 
-			go serveDataNode(conn)
 			logger.Info("data node joined cluster.", "addr", conn.RemoteAddr())
+
+		case network.UserNodeJoin:
+			if err := handleUserConnection(conn); err != nil {
+				logger.Info("failed to serve user.", "addr", conn.RemoteAddr())
+			}
 
 		default:
 			logger.Error("unsupported ping message type.", "msgtype", buf[0])
@@ -86,12 +89,9 @@ func main() {
 	}
 }
 
-func serveDataNode(conn net.Conn) {
-	defer func() {
-		closeConn(conn)
-		// TODO: need a way to remove this connection from the cluster map
-		// when the node leaves the cluster/code exploded
-	}()
+func handleUserConnection(user net.Conn) error {
+	logger.Info("user connected", "addr", user.RemoteAddr())
+	return nil
 }
 
 func closeConn(conn net.Conn) {
