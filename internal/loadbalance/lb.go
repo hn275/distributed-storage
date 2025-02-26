@@ -6,7 +6,7 @@ import (
 )
 
 type LBAlgo interface {
-	// adding a new node to the cluster
+	Initialize()
 	NodeJoin(net.Conn) error
 	GetNode() (net.Conn, error)
 }
@@ -22,16 +22,14 @@ type LoadBalancer struct {
 const (
 	chanOpCode_nodeJoin = iota
 	chanOpCode_error
+	chanOpCode_nodeRequest
 )
 
 type chanSignal struct {
 	opCode int
 	// nullable
-	connChan chan net.Conn
-	// nullable
 	conn net.Conn
-
-	err error
+	err  error
 }
 
 func NewBalancer(protocol, addr string, algo LBAlgo) (*LoadBalancer, error) {
@@ -54,7 +52,6 @@ func NewBalancer(protocol, addr string, algo LBAlgo) (*LoadBalancer, error) {
 func (lb *LoadBalancer) NodeJoin(node net.Conn) error {
 	nodeJoinSignal := chanSignal{
 		chanOpCode_nodeJoin,
-		nil,
 		node,
 		nil,
 	}
@@ -67,6 +64,19 @@ func (lb *LoadBalancer) NodeJoin(node net.Conn) error {
 	}
 
 	return response.err
+}
+
+func (lb *LoadBalancer) NodeDispatch() (net.Conn, error) {
+	nodeJoinSignal := chanSignal{
+		chanOpCode_nodeRequest,
+		nil,
+		nil,
+	}
+
+	lb.connChan <- nodeJoinSignal
+	response := <-lb.connChan
+
+	return response.conn, response.err
 }
 
 func (lb *LoadBalancer) queryServer() {
@@ -97,9 +107,8 @@ func (lb *LoadBalancer) handleNodeJoin(signal *chanSignal) {
 	}
 
 	lb.connChan <- chanSignal{
-		opCode:   chanOpCode_error,
-		connChan: nil,
-		conn:     nil,
-		err:      lb.engine.NodeJoin(signal.conn),
+		opCode: chanOpCode_error,
+		conn:   nil,
+		err:    lb.engine.NodeJoin(signal.conn),
 	}
 }

@@ -22,10 +22,13 @@ func init() {
 }
 
 func main() {
+	algo := loadbalance.RoundRobin{}
+	algo.Initialize()
+
 	lbSrv, err := loadbalance.NewBalancer(
 		network.ProtoTcp4,
 		serverAddr,
-		loadbalance.NewSimpleAlgo(),
+		&algo,
 	)
 	if err != nil {
 		panic(err)
@@ -51,9 +54,9 @@ func main() {
 
 		// handling the initial ping
 		if _, err = conn.Read(buf[:]); err != nil {
+			// peer disconnected, silent return
 			if errors.Is(err, io.EOF) {
-				// peer disconnected, silent return
-				return
+				continue
 			}
 
 			logger.Error("failed to read from socket.",
@@ -64,6 +67,7 @@ func main() {
 		}
 
 		logger.Info("new connection.", "peer", conn.RemoteAddr())
+
 		switch buf[0] {
 		case network.DataNodeJoin:
 			if err := lbSrv.NodeJoin(conn); err != nil {
