@@ -34,6 +34,7 @@ type chanSignal struct {
 
 func NewBalancer(protocol, addr string, algo LBAlgo) (*LoadBalancer, error) {
 	soc, err := net.Listen(protocol, addr)
+
 	if err != nil {
 		return nil, err
 	}
