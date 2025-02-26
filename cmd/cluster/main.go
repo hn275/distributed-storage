@@ -24,10 +24,5 @@ func main() {
 
 	}
 
-	defer func() {
-		for _, node := range nodes {
-			node.lbSoc.Close()
-			slog.Info("disconnecting node.", "addr", node.lbSoc.LocalAddr())
-		}
-	}()
+	select {}
 }
