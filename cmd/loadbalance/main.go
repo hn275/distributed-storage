@@ -66,7 +66,12 @@ func main() {
 		logger.Info("new connection.", "peer", conn.RemoteAddr())
 		switch buf[0] {
 		case network.DataNodeJoin:
-			lbSrv.Engine.NodeJoin(conn)
+			if err := lbSrv.NodeJoin(conn); err != nil {
+				slog.Error("failed to join new node", "addr", conn.RemoteAddr())
+				conn.Close()
+				continue
+			}
+
 			go serveDataNode(conn)
 			logger.Info("data node joined cluster.", "addr", conn.RemoteAddr())
 
