@@ -15,13 +15,13 @@ func main() {
 
 	for i := 0; i < DataNodeCount; i++ {
 		var err error
-		nodes[i], err = nodeJoin(LBNodeAddr)
+		nodes[i], err = nodeInitialize(LBNodeAddr)
 		if err != nil {
 			panic(err)
 		}
 
-		slog.Info("node joined cluster.", "addr", nodes[i].lbSoc.LocalAddr())
-
+		slog.Info("node joined cluster.", "addr", nodes[i].LocalAddr())
+		go nodes[i].Listen()
 	}
 
 	select {}

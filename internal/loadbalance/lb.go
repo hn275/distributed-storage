@@ -3,6 +3,8 @@ package loadbalance
 import (
 	"log/slog"
 	"net"
+
+	"github.com/hn275/distributed-storage/internal/network"
 )
 
 type LBAlgo interface {
@@ -48,6 +50,38 @@ func NewBalancer(protocol, addr string, algo LBAlgo) (*LoadBalancer, error) {
 	go loadBalancer.queryServer()
 
 	return loadBalancer, nil
+}
+
+func (lb *LoadBalancer) UserHandler(user net.Conn) error {
+	defer user.Close()
+	// query for free node's address
+	node, err := lb.engine.GetNode()
+	if err != nil {
+		return err
+	}
+
+	var buf [0xff]byte
+	buf[0] = network.UserNodeJoin
+
+	_, err = node.Write(buf[0:1])
+	if err != nil {
+		return err
+	}
+
+	// forward address
+	n, err := node.Read(buf[:])
+	if err != nil {
+		return err
+	}
+
+	slog.Info("node's listening server.", "msg", string(buf[:n]))
+
+	_, err = user.Write(buf[:n])
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (lb *LoadBalancer) NodeJoin(node net.Conn) error {

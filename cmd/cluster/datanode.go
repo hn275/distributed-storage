@@ -1,16 +1,17 @@
 package main
 
 import (
+	"log/slog"
 	"net"
 
 	"github.com/hn275/distributed-storage/internal/network"
 )
 
 type DataNode struct {
-	lbSoc net.Conn
+	net.Conn
 }
 
-func nodeJoin(lbAddr string) (*DataNode, error) {
+func nodeInitialize(lbAddr string) (*DataNode, error) {
 	laddr, err := net.ResolveTCPAddr(network.ProtoTcp4, ":0") // randomize the port
 	if err != nil {
 		return nil, err
@@ -31,9 +32,53 @@ func nodeJoin(lbAddr string) (*DataNode, error) {
 		return nil, err
 	}
 
-	dataNode := &DataNode{
-		lbSoc,
-	}
+	dataNode := &DataNode{lbSoc}
 
 	return dataNode, nil
+}
+
+func (nodeConn *DataNode) Listen() {
+	defer func() {
+		// TODO: notify LB to join the node again
+	}()
+
+	var buf [6]byte
+	// get a request from LB
+	n, err := nodeConn.Read(buf[:])
+	if err != nil {
+		slog.Error("failed to read from LB.", "err", err)
+		return
+	}
+
+	if n != 1 || buf[0] != network.UserNodeJoin {
+		slog.Warn("invalid message from LB node.", "msg", string(buf[:]))
+		return
+	}
+
+	// open a new port for user to dial
+	soc, err := net.Listen(network.ProtoTcp4, ":0")
+	if err != nil {
+		slog.Error("failed to open new socket", "err", err)
+		return
+	}
+
+	go serveUser(soc)
+
+	// send to lb addr
+	if _, err := nodeConn.Write([]byte(soc.Addr().String())); err != nil {
+		panic(err)
+	}
+}
+
+func serveUser(soc net.Listener) {
+	defer soc.Close()
+
+	slog.Info("waiting for user connection.", "addr", soc.Addr().String(), "protocol", soc.Addr().Network())
+
+	user, err := soc.Accept()
+	if err != nil {
+		panic(err)
+	}
+
+	slog.Info("user connected.", "addr", user.RemoteAddr(), "protocol", user.RemoteAddr().Network())
 }

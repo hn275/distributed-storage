@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 	"net"
 
 	"github.com/hn275/distributed-storage/internal/network"
@@ -15,17 +15,23 @@ func main() {
 		panic(err)
 	}
 
-	pingMsg := [...]byte{network.UserNodeJoin}
-	if _, err := lbConn.Write(pingMsg[:]); err != nil {
+	if _, err := lbConn.Write([]byte{network.UserNodeJoin}); err != nil {
 		panic(err)
 	}
 
-	buf := make([]byte, 128)
-	n, err := lbConn.Read(buf)
+	slog.Info("connected to LB.", "remote_addr", lbConn.RemoteAddr())
+
+	var buf [0xff]byte
+	n, err := lbConn.Read(buf[:])
 	if err != nil {
 		panic(err)
 	}
 
-	buf = buf[:n]
-	fmt.Println("LB response", string(buf))
+	dataNodeAddr := string(buf[:n])
+	dataConn, err := net.Dial(network.ProtoTcp4, dataNodeAddr)
+	if err != nil {
+		panic(err)
+	}
+
+	slog.Info("data node connected.", "addr", dataConn.RemoteAddr(), "protocol", dataConn.RemoteAddr().Network())
 }

@@ -52,7 +52,6 @@ func main() {
 			continue
 		}
 
-		// handling the initial ping
 		if _, err = conn.Read(buf[:]); err != nil {
 			// peer disconnected, silent return
 			if errors.Is(err, io.EOF) {
@@ -66,21 +65,14 @@ func main() {
 			return
 		}
 
-		logger.Info("new connection.", "peer", conn.RemoteAddr())
-
 		switch buf[0] {
 		case network.DataNodeJoin:
-			if err := lbSrv.NodeJoin(conn); err != nil {
-				slog.Error("failed to join new node", "addr", conn.RemoteAddr())
-				continue
-			}
-
-			logger.Info("data node joined cluster.", "addr", conn.RemoteAddr())
+			logger.Info("new data node.", "remote_addr", conn.RemoteAddr())
+			go handle(conn, lbSrv.NodeJoin)
 
 		case network.UserNodeJoin:
-			if err := handleUserConnection(conn); err != nil {
-				logger.Info("failed to serve user.", "addr", conn.RemoteAddr())
-			}
+			logger.Info("new user.", "remote_addr", conn.RemoteAddr())
+			go handle(conn, lbSrv.UserHandler)
 
 		default:
 			logger.Error("unsupported ping message type.", "msgtype", buf[0])
@@ -89,9 +81,12 @@ func main() {
 	}
 }
 
-func handleUserConnection(user net.Conn) error {
-	logger.Info("user connected", "addr", user.RemoteAddr())
-	return nil
+type lbHandler func(net.Conn) error
+
+func handle(conn net.Conn, fn lbHandler) {
+	if err := fn(conn); err != nil {
+		logger.Info("failed to serve user.", "addr", conn.RemoteAddr(), "err", err)
+	}
 }
 
 func closeConn(conn net.Conn) {
