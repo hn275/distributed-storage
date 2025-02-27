@@ -8,12 +8,14 @@ import (
 	"net"
 
 	"github.com/hn275/distributed-storage/internal/loadbalance"
+	"github.com/hn275/distributed-storage/internal/loadbalance/algo"
 	"github.com/hn275/distributed-storage/internal/network"
 )
 
 var (
 	serverAddr string
 	logger     *slog.Logger = slog.Default()
+	lbAlgo     algo.LBAlgo
 )
 
 func init() {
@@ -22,13 +24,13 @@ func init() {
 }
 
 func main() {
-	algo := loadbalance.RoundRobin{}
-	algo.Initialize()
+	lbAlgo = &algo.RoundRobin{}
+	lbAlgo.Initialize()
 
-	lbSrv, err := loadbalance.NewBalancer(
+	lbSrv, err := loadbalance.New(
 		network.ProtoTcp4,
 		serverAddr,
-		&algo,
+		lbAlgo,
 	)
 	if err != nil {
 		panic(err)
@@ -41,7 +43,7 @@ func main() {
 		"address", lbSrv.Addr(),
 	)
 
-	var buf [256]byte
+	var buf [0xff]byte
 	for {
 		conn, err := lbSrv.Accept()
 		if err != nil {
@@ -53,16 +55,16 @@ func main() {
 		}
 
 		if _, err = conn.Read(buf[:]); err != nil {
-			// peer disconnected, silent return
+			// peer disconnected
 			if errors.Is(err, io.EOF) {
 				continue
 			}
 
 			logger.Error("failed to read from socket.",
-				"peer", conn.RemoteAddr(),
+				"remote_addr", conn.RemoteAddr(),
 				"err", err,
 			)
-			return
+			continue
 		}
 
 		switch buf[0] {
@@ -83,9 +85,14 @@ func main() {
 
 type lbHandler func(net.Conn) error
 
+// TODO: add telemetry
 func handle(conn net.Conn, fn lbHandler) {
 	if err := fn(conn); err != nil {
-		logger.Info("failed to serve user.", "addr", conn.RemoteAddr(), "err", err)
+		logger.Error(
+			"handler for peer returned an error.",
+			"remote_addr", conn.RemoteAddr(),
+			"err", err,
+		)
 	}
 }
 

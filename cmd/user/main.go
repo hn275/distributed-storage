@@ -27,8 +27,16 @@ func main() {
 		panic(err)
 	}
 
-	dataNodeAddr := string(buf[:n])
-	dataConn, err := net.Dial(network.ProtoTcp4, dataNodeAddr)
+	if n != 6 {
+		panic("protocol violation, expecting 6 bytes only.")
+	}
+
+	dataNodeAddr, err := network.BytesToAddr(buf[:n])
+	if err != nil {
+		panic(err)
+	}
+
+	dataConn, err := net.DialTCP(network.ProtoTcp4, nil, dataNodeAddr.(*net.TCPAddr))
 	if err != nil {
 		panic(err)
 	}

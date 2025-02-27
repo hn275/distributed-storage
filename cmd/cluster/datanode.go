@@ -7,11 +7,11 @@ import (
 	"github.com/hn275/distributed-storage/internal/network"
 )
 
-type DataNode struct {
+type dataNode struct {
 	net.Conn
 }
 
-func nodeInitialize(lbAddr string) (*DataNode, error) {
+func nodeInitialize(lbAddr string) (*dataNode, error) {
 	laddr, err := net.ResolveTCPAddr(network.ProtoTcp4, ":0") // randomize the port
 	if err != nil {
 		return nil, err
@@ -32,29 +32,37 @@ func nodeInitialize(lbAddr string) (*DataNode, error) {
 		return nil, err
 	}
 
-	dataNode := &DataNode{lbSoc}
+	dataNode := &dataNode{lbSoc}
 
 	return dataNode, nil
 }
 
-func (nodeConn *DataNode) Listen() {
-	defer func() {
-		// TODO: notify LB to join the node again
-	}()
+func (dataNode *dataNode) Listen() {
+	defer dataNode.Close()
 
+	// 4 bytes for the address, 2 bytes for the port
 	var buf [6]byte
-	// get a request from LB
-	n, err := nodeConn.Read(buf[:])
-	if err != nil {
-		slog.Error("failed to read from LB.", "err", err)
-		return
-	}
 
-	if n != 1 || buf[0] != network.UserNodeJoin {
-		slog.Warn("invalid message from LB node.", "msg", string(buf[:]))
-		return
-	}
+	for {
+		// get a request from LB
+		_, err := dataNode.Read(buf[:])
+		if err != nil {
+			slog.Error("failed to read from LB.", "err", err)
+			return
+		}
 
+		switch buf[0] {
+		case network.UserNodeJoin:
+			go dataNode.handleUserNodeJoin()
+
+		default:
+			slog.Error("unsupported request.", "request", buf[0])
+
+		}
+	}
+}
+
+func (dataNode *dataNode) handleUserNodeJoin() {
 	// open a new port for user to dial
 	soc, err := net.Listen(network.ProtoTcp4, ":0")
 	if err != nil {
@@ -62,23 +70,47 @@ func (nodeConn *DataNode) Listen() {
 		return
 	}
 
-	go serveUser(soc)
-
-	// send to lb addr
-	if _, err := nodeConn.Write([]byte(soc.Addr().String())); err != nil {
-		panic(err)
-	}
-}
-
-func serveUser(soc net.Listener) {
 	defer soc.Close()
 
-	slog.Info("waiting for user connection.", "addr", soc.Addr().String(), "protocol", soc.Addr().Network())
+	// send port number to LB
+	var addrBuf [6]byte // 4 bytes for ipv4, 2 bytes for port
+
+	addr, ok := soc.Addr().(*net.TCPAddr)
+	if !ok {
+		slog.Error("returned type is not net.TCPAddr")
+		return
+	}
+
+	if err := network.AddrToBytes(addr, addrBuf[:]); err != nil {
+		slog.Error(
+			"error converting ip address (addr) to bytes.",
+			"addr", addr,
+			"err", err,
+		)
+		return
+	}
+
+	if _, err := dataNode.Write(addrBuf[:]); err != nil {
+		slog.Error(
+			"failed to write to LB.",
+			"err", err,
+		)
+		return
+	}
+
+	// handling user connection
+	slog.Info("waiting for user connection.",
+		"addr", soc.Addr().String(),
+		"protocol", soc.Addr().Network(),
+	)
 
 	user, err := soc.Accept()
 	if err != nil {
 		panic(err)
 	}
 
-	slog.Info("user connected.", "addr", user.RemoteAddr(), "protocol", user.RemoteAddr().Network())
+	slog.Info("user connected.",
+		"addr", user.RemoteAddr(),
+		"protocol", user.RemoteAddr().Network(),
+	)
 }

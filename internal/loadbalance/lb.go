@@ -1,40 +1,20 @@
 package loadbalance
 
 import (
-	"log/slog"
+	"io"
 	"net"
 
+	"github.com/hn275/distributed-storage/internal/loadbalance/algo"
 	"github.com/hn275/distributed-storage/internal/network"
 )
 
-type LBAlgo interface {
-	Initialize()
-	NodeJoin(net.Conn) error
-	GetNode() (net.Conn, error)
-}
-
 type LoadBalancer struct {
 	net.Listener
-	engine LBAlgo
-
-	// cursed
+	engine   algo.LBAlgo
 	connChan chan chanSignal
 }
 
-const (
-	chanOpCode_nodeJoin = iota
-	chanOpCode_error
-	chanOpCode_nodeRequest
-)
-
-type chanSignal struct {
-	opCode int
-	// nullable
-	conn net.Conn
-	err  error
-}
-
-func NewBalancer(protocol, addr string, algo LBAlgo) (*LoadBalancer, error) {
+func New(protocol, addr string, algo algo.LBAlgo) (*LoadBalancer, error) {
 	soc, err := net.Listen(protocol, addr)
 
 	if err != nil {
@@ -54,34 +34,31 @@ func NewBalancer(protocol, addr string, algo LBAlgo) (*LoadBalancer, error) {
 
 func (lb *LoadBalancer) UserHandler(user net.Conn) error {
 	defer user.Close()
-	// query for free node's address
-	node, err := lb.engine.GetNode()
-	if err != nil {
-		return err
+
+	// request for a data node
+	lb.connChan <- chanSignal{chanOpCode_nodeDispatch, nil, nil}
+
+	sig := <-lb.connChan
+	if sig.err != nil {
+		return sig.err
 	}
 
-	var buf [0xff]byte
+	// port fowarding buffer
+	// 2 bytes for the port uint16 port number
+	var buf [2]byte
+
+	// ping data node
 	buf[0] = network.UserNodeJoin
 
-	_, err = node.Write(buf[0:1])
+	_, err := sig.conn.Write(buf[0:1])
 	if err != nil {
 		return err
 	}
 
-	// forward address
-	n, err := node.Read(buf[:])
-	if err != nil {
-		return err
-	}
+	// forward the 2 byte port number to user
+	_, err = io.CopyN(user, sig.conn, 6)
 
-	slog.Info("node's listening server.", "msg", string(buf[:n]))
-
-	_, err = user.Write(buf[:n])
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (lb *LoadBalancer) NodeJoin(node net.Conn) error {
@@ -93,17 +70,12 @@ func (lb *LoadBalancer) NodeJoin(node net.Conn) error {
 
 	lb.connChan <- nodeJoinSignal
 
-	response := <-lb.connChan
-	if response.opCode != chanOpCode_error {
-		panic("expected signal for error response")
-	}
-
-	return response.err
+	return (<-lb.connChan).err
 }
 
 func (lb *LoadBalancer) NodeDispatch() (net.Conn, error) {
 	nodeJoinSignal := chanSignal{
-		chanOpCode_nodeRequest,
+		chanOpCode_nodeDispatch,
 		nil,
 		nil,
 	}
@@ -112,38 +84,4 @@ func (lb *LoadBalancer) NodeDispatch() (net.Conn, error) {
 	response := <-lb.connChan
 
 	return response.conn, response.err
-}
-
-func (lb *LoadBalancer) queryServer() {
-	defer func() {
-		slog.Info("closing query server.")
-		close(lb.connChan)
-	}()
-
-	for {
-		slog.Info("query server waiting for request")
-		signal := <-lb.connChan
-
-		switch signal.opCode {
-
-		case chanOpCode_nodeJoin:
-			lb.handleNodeJoin(&signal)
-
-		default:
-			slog.Error("unhandled op code", "code", signal.opCode)
-
-		}
-	}
-}
-
-func (lb *LoadBalancer) handleNodeJoin(signal *chanSignal) {
-	if signal.conn == nil {
-		panic("invalid signal, required signal.conn and signal.connChan")
-	}
-
-	lb.connChan <- chanSignal{
-		opCode: chanOpCode_error,
-		conn:   nil,
-		err:    lb.engine.NodeJoin(signal.conn),
-	}
 }

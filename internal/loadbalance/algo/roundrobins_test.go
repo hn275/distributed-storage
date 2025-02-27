@@ -1,4 +1,4 @@
-package loadbalance
+package algo
 
 import (
 	"net"
@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// testStruct implements net.Conn
 type testStruct struct{}
 
 func TestRoundRobinInitialize(t *testing.T) {
@@ -55,7 +56,6 @@ func TestRoundRobinGetNode(t *testing.T) {
 	assert.Equal(t, rr.index, 0)
 }
 
-// testStruct implements net.Conn
 func (testt *testStruct) Read(b []byte) (n int, err error) {
 	return 0, nil
 }

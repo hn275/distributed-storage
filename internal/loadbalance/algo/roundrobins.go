@@ -1,17 +1,16 @@
-package loadbalance
+package algo
 
 import (
 	"fmt"
 	"net"
 )
 
+// RoundRobin implements LBAlgo.
 type RoundRobin struct {
 	queue []net.Conn
 	index int
 	size  int
 }
-
-// RoundRobin implements LBAlgo.
 
 func (rr *RoundRobin) Initialize() {
 	rr.size = 0

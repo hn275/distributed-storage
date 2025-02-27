@@ -11,7 +11,7 @@ const (
 )
 
 func main() {
-	nodes := make([]*DataNode, DataNodeCount)
+	nodes := make([]*dataNode, DataNodeCount)
 
 	for i := 0; i < DataNodeCount; i++ {
 		var err error
