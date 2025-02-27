@@ -3,33 +3,34 @@ package loadbalance
 import (
 	"fmt"
 	"net"
-
-	"github.com/eapache/queue"
 )
 
 type RoundRobin struct {
-	queue *queue.Queue
+	queue []net.Conn
+	index int
+	size  int
 }
 
 // RoundRobin implements LBAlgo.
 
 func (rr *RoundRobin) Initialize() {
-	rr.queue = queue.New()
+	rr.size = 0
+	rr.queue = make([]net.Conn, rr.size)
+	rr.index = 0
 }
 
 func (rr *RoundRobin) NodeJoin(node net.Conn) error {
-	rr.queue.Add(node)
+	rr.queue = append(rr.queue, node)
+	rr.size++
 	return nil
 }
 func (rr *RoundRobin) GetNode() (net.Conn, error) {
-	if rr.queue.Length() == 0 {
+	if len(rr.queue) == 0 {
 		return nil, fmt.Errorf("no node can be scheduled.")
 	}
 
-	node, ok := rr.queue.Remove().(net.Conn)
-	if !ok {
-		panic("queue should only contain net.Conn elements.")
-	}
+	node := rr.queue[rr.index]
+	rr.index = (rr.index + 1) % rr.size
 
 	return node, nil
 }
