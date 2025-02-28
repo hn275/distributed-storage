@@ -4,11 +4,11 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"log"
 	"log/slog"
 	"net"
 
-	"github.com/hn275/distributed-storage/internal/loadbalance"
-	"github.com/hn275/distributed-storage/internal/loadbalance/algo"
+	"github.com/hn275/distributed-storage/internal/algo"
 	"github.com/hn275/distributed-storage/internal/network"
 )
 
@@ -24,25 +24,26 @@ func init() {
 }
 
 func main() {
+	// initializing the lb
 	lbAlgo = &algo.RoundRobin{}
 	lbAlgo.Initialize()
 
-	lbSrv, err := loadbalance.New(
-		network.ProtoTcp4,
-		serverAddr,
-		lbAlgo,
-	)
+	soc, err := net.Listen(network.ProtoTcp4, serverAddr)
 	if err != nil {
-		panic(err)
+		log.Fatal("failed to open socket", "err", err)
 	}
 
+	lbSrv := &loadBalancer{soc, lbAlgo, make(chan chanSignal)}
 	defer lbSrv.Close()
+	go lbSrv.queryServer()
+
 	logger.Info(
 		"node started, waiting for services.",
 		"protocol", lbSrv.Addr().Network(),
 		"address", lbSrv.Addr(),
 	)
 
+	// serving
 	var buf [0xff]byte
 	for {
 		conn, err := lbSrv.Accept()
@@ -70,11 +71,11 @@ func main() {
 		switch buf[0] {
 		case network.DataNodeJoin:
 			logger.Info("new data node.", "remote_addr", conn.RemoteAddr())
-			go handle(conn, lbSrv.NodeJoin)
+			go handle(conn, lbSrv.nodeJoinHandler)
 
 		case network.UserNodeJoin:
 			logger.Info("new user.", "remote_addr", conn.RemoteAddr())
-			go handle(conn, lbSrv.UserHandler)
+			go handle(conn, lbSrv.userJoinHandler)
 
 		default:
 			logger.Error("unsupported ping message type.", "msgtype", buf[0])
