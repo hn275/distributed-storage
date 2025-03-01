@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+
   pull_request:
     branches:
       - main
@@ -34,3 +36,6 @@ jobs:
 
       - name: build user binary
         run: go build ./cmd/user
+
+      - name: build datainit binary
+        run: go build ./cmd/datainit
