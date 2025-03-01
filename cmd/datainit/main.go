@@ -4,27 +4,23 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"os"
 
 	"github.com/dustin/go-humanize"
+	"github.com/hn275/distributed-storage/internal/database"
 	"lukechampine.com/blake3"
 )
 
 const (
-	digestSize int = 32
-
-	// i started using these
-	bufferFileName string = "buf"
+	digestSize     int    = 32
+	bufferFileName string = "tmp/buf"
 	fileCount      int    = 12
 )
 
-func makeFilePath(fileName string) string {
-	return "tmp/data/" + fileName
-}
-
-type database struct {
+type dataStore struct {
 	Xsmall  []string `json:"x-small"`
 	Small   []string `json:"small"`
 	Medium  []string `json:"medium"`
@@ -34,6 +30,19 @@ type database struct {
 }
 
 func main() {
+	// created the needed directories
+	dirsNeeded := [...]string{
+		database.Prefix,
+		database.AccessCluster.String(),
+		database.AccessUser.String(),
+	}
+
+	for _, v := range dirsNeeded {
+		if err := createDir(v); err != nil {
+			log.Fatalf("failed to create %s:\n\t%W", v, err)
+		}
+	}
+
 	fileSizeOpts := [...]uint64{
 		1 << 8,
 		1 << 16,
@@ -47,7 +56,7 @@ func main() {
 
 	const fileMode = os.O_RDWR | os.O_CREATE
 
-	db := database{}
+	db := dataStore{}
 
 	for i := 0; i < fileCount; i++ {
 
@@ -75,7 +84,10 @@ func main() {
 		}
 
 		digest := h.Sum(nil)
-		fileName := makeFilePath(hex.EncodeToString(digest))
+		fileName := database.
+			AccessCluster.
+			Append(hex.EncodeToString(digest)).
+			String()
 
 		if err := os.Rename(bufferFileName, fileName); err != nil {
 			panic(err)
@@ -98,12 +110,12 @@ func main() {
 			panic("mod op out of index")
 		}
 
-		log.Println(fileName, "\t", humanize.Bytes(totalFileSize))
+		log.Printf("file created\t%s\t%s", fileName, humanize.Bytes(totalFileSize))
 	}
 
-	indexFileName := makeFilePath("file-index.json")
+	indexFileName := database.AccessUser.Append("file-index.json").String()
 
-	f, err := os.OpenFile(indexFileName, os.O_CREATE|os.O_WRONLY, 0666)
+	f, err := os.OpenFile(indexFileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil {
 		panic(err)
 	}
@@ -112,5 +124,30 @@ func main() {
 		panic(err)
 	}
 
-	log.Println("created index json:", indexFileName)
+	log.Printf("file created\t%s\n", indexFileName)
+}
+
+func createDir(dir string) error {
+	// check if directory exists
+	if _, err := os.Stat(dir); err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("error checking if directory exists: %w", err)
+		}
+	} else {
+		log.Printf("%s exists, deleting.\n", dir)
+		err := os.RemoveAll(dir)
+		if err != nil {
+			return fmt.Errorf("failed to delete existing directory: %w", err)
+		}
+	}
+
+	// Create new directory
+	err := os.MkdirAll(dir, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	log.Printf("dir created\t\t%s\n", dir)
+
+	return nil
 }
