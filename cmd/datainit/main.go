@@ -3,77 +3,114 @@ package main
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
+	"encoding/json"
+	"io"
 	"log"
-	"math"
 	"os"
-	"strconv"
 
+	"github.com/dustin/go-humanize"
 	"lukechampine.com/blake3"
 )
 
 const (
-	usage string = `usage: %s <file-size>
-	file-size: in bytes, the value should be an unsigned 64 bit integer
-`
+	digestSize int = 32
 
-	blockSize   uint64 = 1 << 12
-	digestSize  int    = 32
-	tmpFileName string = "tmp-data"
+	// i started using these
+	bufferFileName string = "buf"
+	fileCount      int    = 12
 )
 
+func makeFilePath(fileName string) string {
+	return "tmp/data/" + fileName
+}
+
+type database struct {
+	Xsmall  []string `json:"x-small"`
+	Small   []string `json:"small"`
+	Medium  []string `json:"medium"`
+	Large   []string `json:"large"`
+	Xlarge  []string `json:"x-large"`
+	XXlarge []string `json:"xx-large"`
+}
+
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, usage, os.Args[0])
-		os.Exit(1)
+	fileSizeOpts := [...]uint64{
+		1 << 8,
+		1 << 16,
+		1 << 20,
+		1 << 24,
+		1 << 28,
+		1 << 30,
 	}
 
-	totalFileSize, err := strconv.ParseUint(os.Args[1], 10, 64)
-	if err != nil {
-		log.Fatal(err)
-	}
+	fileSizeOptsLen := len(fileSizeOpts)
 
-	var hashKey []byte = nil // TODO: hard code this key
-	h := blake3.New(digestSize, hashKey)
+	const fileMode = os.O_RDWR | os.O_CREATE
 
-	f, err := os.OpenFile(tmpFileName, os.O_RDONLY|os.O_WRONLY|os.O_CREATE, 0666)
-	if err != nil {
-		panic(err)
-	}
+	db := database{}
 
-	blocks := uint16(math.Ceil(float64(totalFileSize) / float64(blockSize)))
-	var buf [blockSize]byte
-	for i := uint16(0); i < blocks; i++ {
-		var iterSize uint64
-		if totalFileSize > blockSize {
-			iterSize = blockSize
-		} else {
-			iterSize = totalFileSize
-		}
+	for i := 0; i < fileCount; i++ {
 
-		n, err := rand.Reader.Read(buf[:iterSize])
+		f, err := os.OpenFile(bufferFileName, fileMode, 0666)
 		if err != nil {
 			panic(err)
 		}
 
-		// write to file
-		if _, err := f.Write(buf[:n]); err != nil {
+		defer f.Close()
+
+		totalFileSize := fileSizeOpts[i%fileSizeOptsLen]
+
+		if _, err := io.CopyN(f, rand.Reader, int64(totalFileSize)); err != nil {
 			panic(err)
 		}
 
-		// write to hasher
-		if _, err := h.Write(buf[:n]); err != nil {
+		// resetting the cursor
+		if _, err := f.Seek(0, 0); err != nil {
 			panic(err)
 		}
-		totalFileSize -= uint64(n)
+
+		h := blake3.New(digestSize, nil)
+		if _, err := io.Copy(h, f); err != nil {
+			panic(err)
+		}
+
+		digest := h.Sum(nil)
+		fileName := makeFilePath(hex.EncodeToString(digest))
+
+		if err := os.Rename(bufferFileName, fileName); err != nil {
+			panic(err)
+		}
+
+		switch i % fileSizeOptsLen {
+		case 0:
+			db.Xsmall = append(db.Xsmall, fileName)
+		case 1:
+			db.Small = append(db.Small, fileName)
+		case 2:
+			db.Medium = append(db.Medium, fileName)
+		case 3:
+			db.Large = append(db.Large, fileName)
+		case 4:
+			db.Xlarge = append(db.Xlarge, fileName)
+		case 5:
+			db.XXlarge = append(db.XXlarge, fileName)
+		default:
+			panic("mod op out of index")
+		}
+
+		log.Println(fileName, "\t", humanize.Bytes(totalFileSize))
 	}
 
-	// TODO: rename the file
-	fileName := hex.EncodeToString(h.Sum(nil))
+	indexFileName := makeFilePath("file-index.json")
 
-	if err := os.Rename(tmpFileName, fileName); err != nil {
+	f, err := os.OpenFile(indexFileName, os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println("fileSize", totalFileSize, "fileName", fileName)
+	if err := json.NewEncoder(f).Encode(&db); err != nil {
+		panic(err)
+	}
+
+	log.Println("created index json:", indexFileName)
 }
