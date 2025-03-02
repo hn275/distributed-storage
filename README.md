@@ -5,24 +5,25 @@ balancing techniques in a P2P system.
 
 # Simulation
 
+For the simulation, we will use Docker and docker-compose to automate the code
+compilation and initialization of the required network topology processes.
+
 TODO: redo docker compose and update the docs
 
 # Development
 
-For the demo, we will use Docker and docker-compose to automate the code
-compilation and initialization of the required network topology processes.
+## File Data
 
-For development however, execute the binaries:
-
-```sh
-go run ./cmd/<binary>
-```
-
-You will likely not have to build the binary before execution, but if needed:
+Before running the simulation, the file data can be generated with the
+`data-gen` executable:
 
 ```sh
-go build ./cmd/<binary>
+go run ./cmd/data-gen
 ```
+
+This script will create a dir entry `tmp/data`, and 6 files of different size
+for the simulation. The entire `tmp` directory is added to `.gitignore`, since
+the generated files can be as large as 1Gb.
 
 ## Project Directory Structure
 
@@ -32,32 +33,10 @@ go build ./cmd/<binary>
 | Private packages | `./internal/<binary-name>/`  |
 | Shared packages  | `./internal/<package-name>/` |
 
-## Tests
+## CI/CI: Code Validation
 
-For any tests you write, put it in the same directory as your code with the
-same filename, with a `_test` suffix before file extension. For ie, the tests
-for the code in `./foo/bar.go` should be in `./foo/bar_test.go`.
-
-Go build tool includes testing with `go test`
-
-```sh
-# to run all tests
-go test -v ./...
-
-# or give it a path to a package you want to run the test
-go test -v ./foo/
-```
-
-For more information, run:
-
-```sh
-go help test
-```
-
-## Code Validation
-
-A [CI/Code Validation](./.github/workflows/ci.yml) pipeline is set up for code 
-validation when a PR is opened. The action is required to complete without 
+A [CI/Code Validation](./.github/workflows/ci.yml) pipeline is set up for code
+validation when a PR is opened. The action is required to complete without
 errors before the PR can be pulled into `main`.
 
 ### Code Formatting
@@ -84,7 +63,6 @@ For more usage, see the [docs](https://pkg.go.dev/cmd/gofmt) for `gofmt`.
     - can be stateful, different algos can have different struct type, etc etc
     - internal state processing
 - Data Node
-  - utilizing SQLite.
   - no communication needed between data nodes.
   - all nodes have the same data.
   - directly connect to the users for the data transfer.

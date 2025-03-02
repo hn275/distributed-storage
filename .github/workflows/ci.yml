@@ -37,5 +37,5 @@ jobs:
       - name: build user binary
         run: go build ./cmd/user
 
-      - name: build datainit binary
-        run: go build ./cmd/datainit
+      - name: build data-gen binary
+        run: go build ./cmd/data-gen
