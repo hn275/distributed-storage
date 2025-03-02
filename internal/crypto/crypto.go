@@ -1,0 +1,56 @@
+package crypto
+
+import (
+	"fmt"
+
+	"golang.org/x/crypto/chacha20poly1305"
+)
+
+const (
+	NonceSize = chacha20poly1305.NonceSizeX
+	OverHead  = chacha20poly1305.Overhead
+)
+
+var (
+	DataNodeSecretKey = [32]byte{
+		0x4e, 0xc2, 0x1a, 0x9d, 0x3b, 0x58, 0x7f, 0x0c,
+		0xd6, 0x85, 0xf1, 0xb3, 0x24, 0x69, 0xa7, 0xe0,
+		0x5b, 0x92, 0x17, 0xce, 0x3f, 0x8d, 0x46, 0xb0,
+		0xda, 0x71, 0x2c, 0x95, 0xe8, 0x0f, 0x63, 0x9a,
+	}
+
+	UserPublicKey = [32]byte{
+		0x18, 0xf7, 0xa3, 0x5d, 0xc6, 0x9e, 0x42, 0xb1,
+		0x7f, 0x2c, 0x84, 0xd9, 0x36, 0xe0, 0x5b, 0x91,
+		0x0a, 0x67, 0xd3, 0x8c, 0x4f, 0xb5, 0x29, 0x73,
+		0xec, 0x1d, 0xa4, 0x58, 0xc0, 0x96, 0x3f, 0x0e,
+	}
+)
+
+// encrypt and write to buf
+func Encrypt(buf, key, nonce, plaintext, aad []byte) error {
+	if len(nonce) != NonceSize {
+		return fmt.Errorf(
+			"invalid nonce length, expected %d bytes, got %d bytes",
+			NonceSize, len(nonce),
+		)
+	}
+
+	cipher, err := chacha20poly1305.NewX(key)
+	if err != nil {
+		return err
+	}
+
+	cipher.Seal(buf, nonce, plaintext, aad)
+	return nil
+}
+
+func Decrypt(buf, key, nonce, ciphertext, aad []byte) error {
+	cipher, err := chacha20poly1305.NewX(key)
+	if err != nil {
+		return err
+	}
+
+	_, err = cipher.Open(buf, nonce, ciphertext, aad)
+	return err
+}
