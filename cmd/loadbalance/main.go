@@ -33,7 +33,7 @@ func main() {
 		log.Fatal("failed to open socket", "err", err)
 	}
 
-	lbSrv := &loadBalancer{soc, lbAlgo, make(chan chanSignal)}
+	lbSrv := &loadBalancer{soc, lbAlgo, make(chan chanSignal, 128)}
 	defer lbSrv.Close()
 	go lbSrv.queryServer()
 

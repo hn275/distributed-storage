@@ -19,15 +19,6 @@ var fileSizeOpts = [...]uint64{
 	1 << 30,
 }
 
-type dataStore struct {
-	Xsmall  string `json:"x-small"`
-	Small   string `json:"small"`
-	Medium  string `json:"medium"`
-	Large   string `json:"large"`
-	Xlarge  string `json:"x-large"`
-	XXlarge string `json:"xx-large"`
-}
-
 func main() {
 	// created the needed directories
 	dirsNeeded := [...]string{
@@ -42,7 +33,7 @@ func main() {
 		}
 	}
 
-	db := dataStore{}
+	db := database.FileIndex{}
 
 	for i, fileSize := range fileSizeOpts {
 		fileBytes, fileName, err := database.MakeFile(fileSize)

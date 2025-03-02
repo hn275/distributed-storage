@@ -3,13 +3,13 @@ package database
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"io"
+	"os"
 
 	"github.com/hn275/distributed-storage/internal/crypto"
 	"lukechampine.com/blake3"
 )
-
-type Path string
 
 const (
 	Prefix        = "tmp/data/"
@@ -18,6 +18,8 @@ const (
 	fileOverhead  = crypto.OverHead + crypto.NonceSize
 	digestSize    = 32
 )
+
+type Path string
 
 func (p Path) String() string {
 	return Prefix + string(p)
@@ -65,4 +67,29 @@ func MakeFile(fileSize uint64) ([]byte, string, error) {
 
 	digest := h.Sum(nil)
 	return buf, hex.EncodeToString(digest), err
+}
+
+// file addressing
+
+type FileIndex struct {
+	Xsmall  string `json:"x-small"`
+	Small   string `json:"small"`
+	Medium  string `json:"medium"`
+	Large   string `json:"large"`
+	Xlarge  string `json:"x-large"`
+	XXlarge string `json:"xx-large"`
+}
+
+func NewFileIndex() (*FileIndex, error) {
+	path := AccessUser.Append("file-index.json").String()
+
+	f, err := os.OpenFile(path, os.O_RDONLY, 0666)
+	if err != nil {
+		return nil, err
+	}
+
+	fileIndex := new(FileIndex)
+	err = json.NewDecoder(f).Decode(fileIndex)
+
+	return fileIndex, err
 }

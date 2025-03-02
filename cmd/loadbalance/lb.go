@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -39,9 +40,7 @@ func (lb *loadBalancer) queryServer() {
 	}()
 
 	slog.Info("query server waiting for requests")
-	for {
-		signal := <-lb.connChan
-
+	for signal := range lb.connChan {
 		switch signal.opCode {
 
 		case chanOpCode_nodeJoin:
@@ -51,7 +50,11 @@ func (lb *loadBalancer) queryServer() {
 			lb.nodeDispatchQuery()
 
 		default:
-			slog.Error("unhandled op code", "code", signal.opCode)
+			lb.connChan <- chanSignal{
+				opCode: chanOpCode_response,
+				conn:   nil,
+				err:    fmt.Errorf("unhandled op code: %d", signal.opCode),
+			}
 
 		}
 	}
@@ -60,6 +63,25 @@ func (lb *loadBalancer) queryServer() {
 func (lb *loadBalancer) nodeDispatchQuery() {
 	// query for free node's address
 	nodeConn, err := lb.engine.GetNode()
+
+	if err != nil {
+		lb.connChan <- chanSignal{
+			opCode: chanOpCode_response,
+			conn:   nil,
+			err:    err,
+		}
+
+		return
+	}
+
+	if nodeConn == nil {
+		lb.connChan <- chanSignal{
+			opCode: chanOpCode_response,
+			conn:   nil,
+			err:    fmt.Errorf("nodeConn nil??"),
+		}
+		return
+	}
 
 	lb.connChan <- chanSignal{
 		opCode: chanOpCode_response,
@@ -91,6 +113,10 @@ func (lb *loadBalancer) userJoinHandler(user net.Conn) error {
 	sig := <-lb.connChan
 	if sig.err != nil {
 		return sig.err
+	}
+
+	if sig.conn == nil {
+		return fmt.Errorf("nil node connection.")
 	}
 
 	// port fowarding

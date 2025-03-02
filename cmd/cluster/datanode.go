@@ -1,9 +1,13 @@
 package main
 
 import (
+	"encoding/hex"
 	"log/slog"
 	"net"
+	"os"
 
+	"github.com/hn275/distributed-storage/internal/crypto"
+	"github.com/hn275/distributed-storage/internal/database"
 	"github.com/hn275/distributed-storage/internal/network"
 )
 
@@ -113,4 +117,47 @@ func (dataNode *dataNode) handleUserNodeJoin() {
 		"addr", user.RemoteAddr(),
 		"protocol", user.RemoteAddr().Network(),
 	)
+
+	defer user.Close()
+
+	// get file digest + pub key from user
+	var buf [64]byte
+	if _, err := user.Read(buf[:]); err != nil {
+		panic(err)
+	}
+
+	fileName := hex.EncodeToString(buf[:32])
+	filePath := database.AccessCluster.Append(fileName).String()
+
+	// read + decrypt file
+	fileContent, err := os.ReadFile(filePath)
+	if err != nil {
+		panic(err)
+	}
+
+	var (
+		pubKey     []byte = buf[32:]
+		secKey     []byte = crypto.DataNodeSecretKey[:]
+		dst        []byte = fileContent[crypto.NonceSize:crypto.NonceSize]
+		nonce      []byte = fileContent[:crypto.NonceSize]
+		ciphertext []byte = fileContent[crypto.NonceSize:]
+	)
+
+	err = crypto.Decrypt(
+		dst, secKey, nonce,
+		ciphertext, pubKey,
+	)
+
+	if err != nil {
+		panic(err)
+	}
+
+	// send it over the wire
+	plaintext := fileContent[crypto.NonceSize : len(fileContent)-crypto.OverHead]
+
+	if _, err := user.Write(plaintext); err != nil {
+		panic(err)
+	}
+
+	slog.Info("user service complete.", "addr", user.RemoteAddr())
 }
