@@ -1,32 +1,31 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"os"
 
 	"github.com/dustin/go-humanize"
 	"github.com/hn275/distributed-storage/internal/database"
-	"lukechampine.com/blake3"
 )
 
-const (
-	digestSize     int    = 32
-	bufferFileName string = "tmp/buf"
-	fileCount      int    = 12
-)
+var fileSizeOpts = [...]uint64{
+	1 << 8,
+	1 << 16,
+	1 << 20,
+	1 << 24,
+	1 << 28,
+	1 << 30,
+}
 
 type dataStore struct {
-	Xsmall  []string `json:"x-small"`
-	Small   []string `json:"small"`
-	Medium  []string `json:"medium"`
-	Large   []string `json:"large"`
-	Xlarge  []string `json:"x-large"`
-	XXlarge []string `json:"xx-large"`
+	Xsmall  string `json:"x-small"`
+	Small   string `json:"small"`
+	Medium  string `json:"medium"`
+	Large   string `json:"large"`
+	Xlarge  string `json:"x-large"`
+	XXlarge string `json:"xx-large"`
 }
 
 func main() {
@@ -43,74 +42,43 @@ func main() {
 		}
 	}
 
-	fileSizeOpts := [...]uint64{
-		1 << 8,
-		1 << 16,
-		1 << 20,
-		1 << 24,
-		1 << 28,
-		1 << 30,
-	}
-
-	fileSizeOptsLen := len(fileSizeOpts)
-
-	const fileMode = os.O_RDWR | os.O_CREATE
-
 	db := dataStore{}
 
-	for i := 0; i < fileCount; i++ {
-
-		f, err := os.OpenFile(bufferFileName, fileMode, 0666)
+	for i, fileSize := range fileSizeOpts {
+		fileBytes, fileName, err := database.MakeFile(fileSize)
 		if err != nil {
 			panic(err)
 		}
 
-		defer f.Close()
-
-		totalFileSize := fileSizeOpts[i%fileSizeOptsLen]
-
-		if _, err := io.CopyN(f, rand.Reader, int64(totalFileSize)); err != nil {
+		// write to file
+		filePath := database.AccessCluster.Append(fileName).String()
+		fOut, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
 			panic(err)
 		}
 
-		// resetting the cursor
-		if _, err := f.Seek(0, 0); err != nil {
+		if _, err := fOut.Write(fileBytes); err != nil {
 			panic(err)
 		}
 
-		h := blake3.New(digestSize, nil)
-		if _, err := io.Copy(h, f); err != nil {
-			panic(err)
-		}
-
-		digest := h.Sum(nil)
-		fileName := database.
-			AccessCluster.
-			Append(hex.EncodeToString(digest)).
-			String()
-
-		if err := os.Rename(bufferFileName, fileName); err != nil {
-			panic(err)
-		}
-
-		switch i % fileSizeOptsLen {
+		switch i {
 		case 0:
-			db.Xsmall = append(db.Xsmall, fileName)
+			db.Xsmall = fileName
 		case 1:
-			db.Small = append(db.Small, fileName)
+			db.Small = fileName
 		case 2:
-			db.Medium = append(db.Medium, fileName)
+			db.Medium = fileName
 		case 3:
-			db.Large = append(db.Large, fileName)
+			db.Large = fileName
 		case 4:
-			db.Xlarge = append(db.Xlarge, fileName)
+			db.Xlarge = fileName
 		case 5:
-			db.XXlarge = append(db.XXlarge, fileName)
+			db.XXlarge = fileName
 		default:
-			panic("mod op out of index")
+			panic("index out of bound")
 		}
 
-		log.Printf("file created\t%s\t%s", fileName, humanize.Bytes(totalFileSize))
+		log.Printf("file created\t%s\t%s", fileName, humanize.Bytes(fileSize))
 	}
 
 	indexFileName := database.AccessUser.Append("file-index.json").String()
