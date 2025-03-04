@@ -2,35 +2,47 @@ package main
 
 import (
 	"errors"
-	"flag"
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
 	"net"
 
 	"github.com/hn275/distributed-storage/internal/algo"
+	"github.com/hn275/distributed-storage/internal/config"
 	"github.com/hn275/distributed-storage/internal/network"
 )
 
 var (
-	serverAddr string
-	logger     *slog.Logger = slog.Default()
-	lbAlgo     algo.LBAlgo
+	logger *slog.Logger = slog.Default()
+
+	supportedAlgo = map[string]algo.LBAlgo{
+		"simple-round-robin": &algo.RoundRobin{},
+	}
 )
 
-func init() {
-	flag.StringVar(&serverAddr, "addr", ":8000", "address to bind the load balancer")
-	flag.Parse()
-}
-
 func main() {
-	// initializing the lb
-	lbAlgo = &algo.RoundRobin{}
-	lbAlgo.Initialize()
-
-	soc, err := net.Listen(network.ProtoTcp4, serverAddr)
+	conf, err := config.NewLB("config.yml")
 	if err != nil {
-		log.Fatal("failed to open socket", "err", err)
+		log.Fatalf("failed to read config. %v", err)
+	}
+
+	// initializing the lb
+	var lbAlgo algo.LBAlgo
+	lbAlgo, ok := supportedAlgo[conf.Algorithm]
+	if !ok {
+		log.Fatalf("unsupported algorithm: %s", conf.Algorithm)
+	}
+
+	lbAlgo.Initialize()
+	log.Printf("load balancing algorithm: %s\n", conf.Algorithm)
+
+	// open listening socket
+	portStr := fmt.Sprintf(":%d", conf.LocalPort)
+	soc, err := net.Listen(network.ProtoTcp4, portStr)
+
+	if err != nil {
+		log.Fatalf("failed to open listening socket: %W", err)
 	}
 
 	lbSrv := &loadBalancer{soc, lbAlgo, make(chan chanSignal, 128)}
@@ -56,15 +68,13 @@ func main() {
 		}
 
 		if _, err = conn.Read(buf[:]); err != nil {
-			// peer disconnected
-			if errors.Is(err, io.EOF) {
-				continue
+			// silent continue if peer disconnected
+			if !errors.Is(err, io.EOF) {
+				logger.Error("failed to read from socket.",
+					"remote_addr", conn.RemoteAddr(),
+					"err", err,
+				)
 			}
-
-			logger.Error("failed to read from socket.",
-				"remote_addr", conn.RemoteAddr(),
-				"err", err,
-			)
 			continue
 		}
 

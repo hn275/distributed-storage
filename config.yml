@@ -1,0 +1,8 @@
+user:
+
+cluster:
+  node: 100
+
+load-balancer:
+  algo: round-robin
+  local-port: 8000
