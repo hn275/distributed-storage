@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"flag"
 	"log/slog"
 	"os"
 	"sync"
@@ -10,12 +10,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const (
-	PortPrefix int    = 9000
-	LBNodeAddr string = "127.0.0.1:8000" // TODO: pull this in from env
+var (
+	lbNodeAddr string
 )
 
 func main() {
+	flag.StringVar(&lbNodeAddr, "addr", "127.0.0.1:8000", "Load Balancing address")
+	flag.Parse()
+
 	config, err := config.NewCluster("config.yml")
 	if err != nil {
 		panic(err)
@@ -31,31 +33,36 @@ func main() {
 		panic(err)
 	}
 
-	wg := new(sync.WaitGroup)
+	// initialize cluster
+	slog.Info(
+		"initializing cluster.",
+		"node-count", config.Node,
+		"load-balancer-addr", lbNodeAddr,
+	)
 
-	slog.Info(fmt.Sprintf("creating %d nodes.", config.Node))
+	wg := new(sync.WaitGroup)
 	wg.Add(int(config.Node))
 
-	for i := uint16(0); i < config.Node; i++ {
+	for nodeID := uint16(0); nodeID < config.Node; nodeID++ {
 		go func(wg *sync.WaitGroup, nodeIndex uint16) {
 			defer wg.Done()
 
-			node, err := nodeInitialize(LBNodeAddr)
+			node, err := nodeInitialize(lbNodeAddr, nodeID)
 			if err != nil {
 				slog.Error(
 					"failed to initialize a data node.",
-					"node-index", i,
+					"node-index", nodeID,
 					"err", err,
 				)
 			}
 
 			slog.Info(
 				"node online.",
-				"node-index", i,
+				"node-index", nodeID,
 				"addr", node.LocalAddr(),
 			)
 			node.Listen()
-		}(wg, i)
+		}(wg, nodeID)
 	}
 
 	wg.Wait()
