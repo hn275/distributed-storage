@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/hex"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -9,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/dustin/go-humanize"
+	"github.com/hn275/distributed-storage/internal/config"
 	"github.com/hn275/distributed-storage/internal/crypto"
 	"github.com/hn275/distributed-storage/internal/database"
 	"github.com/hn275/distributed-storage/internal/network"
@@ -18,6 +20,13 @@ import (
 const LBNodeAddr string = "127.0.0.1:8000" // TODO: load this from env with default value
 
 func main() {
+	// load config
+	conf, err := config.NewUserConfig("config.yml")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(conf)
+
 	// get file addresses
 	fileIndex, err := database.NewFileIndex()
 	if err != nil {
@@ -50,7 +59,7 @@ func request(fileHash string, wg *sync.WaitGroup) {
 
 	slog.Info("requesting", "file", fileHash)
 
-	// connect to lb
+	// open socket to load balancer
 	lbConn, err := net.Dial(network.ProtoTcp4, LBNodeAddr)
 	if err != nil {
 		panic(err)
