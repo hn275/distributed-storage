@@ -22,7 +22,7 @@ var (
 )
 
 func main() {
-	conf, err := config.NewLB("config.yml")
+	conf, err := config.NewLBConfig("config.yml")
 	if err != nil {
 		log.Fatalf("failed to read config. %v", err)
 	}

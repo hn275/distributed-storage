@@ -7,6 +7,7 @@ import (
 )
 
 type config struct {
+	User         userYaml
 	Cluster      clusterYaml
 	LoadBalancer loadbalancerYaml `yaml:"load-balancer"`
 }
@@ -20,7 +21,9 @@ type loadbalancerYaml struct {
 	LocalPort uint16 `yaml:"local-port"`
 }
 
-func NewLB(filePath string) (*loadbalancerYaml, error) {
+type userYaml struct{}
+
+func NewLBConfig(filePath string) (*loadbalancerYaml, error) {
 	conf := &config{}
 	if err := readConfig(conf, filePath); err != nil {
 		return nil, err
@@ -40,12 +43,20 @@ func NewLB(filePath string) (*loadbalancerYaml, error) {
 	return &conf.LoadBalancer, nil
 }
 
-func NewCluster(filePath string) (*clusterYaml, error) {
+func NewClusterConfig(filePath string) (*clusterYaml, error) {
 	conf := &config{}
 	if err := readConfig(conf, filePath); err != nil {
 		return nil, err
 	}
 	return &conf.Cluster, nil
+}
+
+func NewUserConfig(filePath string) (*userYaml, error) {
+	conf := &config{}
+	if err := readConfig(conf, filePath); err != nil {
+		return nil, err
+	}
+	return &conf.User, nil
 }
 
 func readConfig(confBuf *config, filePath string) error {
@@ -54,5 +65,4 @@ func readConfig(confBuf *config, filePath string) error {
 		return err
 	}
 	return yaml.NewDecoder(fd).Decode(confBuf)
-
 }

@@ -18,7 +18,7 @@ func main() {
 	flag.StringVar(&lbNodeAddr, "addr", "127.0.0.1:8000", "Load Balancing address")
 	flag.Parse()
 
-	config, err := config.NewCluster("config.yml")
+	config, err := config.NewClusterConfig("config.yml")
 	if err != nil {
 		panic(err)
 	}
