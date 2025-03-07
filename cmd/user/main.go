@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/hex"
-	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -21,11 +20,10 @@ const LBNodeAddr string = "127.0.0.1:8000" // TODO: load this from env with defa
 
 func main() {
 	// load config
-	conf, err := config.NewUserConfig("config.yml")
+	_, err := config.NewUserConfig("config.yml")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(conf)
 
 	// get file addresses
 	fileIndex, err := database.NewFileIndex()

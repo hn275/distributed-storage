@@ -4,5 +4,5 @@ cluster:
   node: 100
 
 load-balancer:
-  algo: round-robin
+  algo: simple-round-robin
   local-port: 8000
