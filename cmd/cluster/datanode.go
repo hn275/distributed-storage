@@ -13,9 +13,10 @@ import (
 
 type dataNode struct {
 	net.Conn
+	id uint16
 }
 
-func nodeInitialize(lbAddr string) (*dataNode, error) {
+func nodeInitialize(lbAddr string, nodeID uint16) (*dataNode, error) {
 	laddr, err := net.ResolveTCPAddr(network.ProtoTcp4, ":0") // randomize the port
 	if err != nil {
 		return nil, err
@@ -36,7 +37,7 @@ func nodeInitialize(lbAddr string) (*dataNode, error) {
 		return nil, err
 	}
 
-	dataNode := &dataNode{lbSoc}
+	dataNode := &dataNode{lbSoc, nodeID}
 
 	return dataNode, nil
 }
