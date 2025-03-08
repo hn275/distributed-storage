@@ -2,13 +2,17 @@ package main
 
 import (
 	"encoding/hex"
+	"errors"
+	"flag"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
-	"os"
 	"sync"
+	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/hn275/distributed-storage/internal"
 	"github.com/hn275/distributed-storage/internal/config"
 	"github.com/hn275/distributed-storage/internal/crypto"
 	"github.com/hn275/distributed-storage/internal/database"
@@ -16,11 +20,16 @@ import (
 	"lukechampine.com/blake3"
 )
 
-const LBNodeAddr string = "127.0.0.1:8000" // TODO: load this from env with default value
-
 func main() {
+	var lbNodeAddr string
+
+	flag.StringVar(&lbNodeAddr, "lbaddr", "127.0.0.1:8000", "address of the loadbalancer")
+	flag.Parse()
+
+	slog.Info("Load balancing address.", "lbaddr", lbNodeAddr)
+
 	// load config
-	_, err := config.NewUserConfig("config.yml")
+	_, err := config.NewUserConfig(internal.ConfigFilePath)
 	if err != nil {
 		panic(err)
 	}
@@ -44,110 +53,124 @@ func main() {
 	wg.Add(len(fileNames))
 
 	for _, fileName := range fileNames {
-		go request(fileName, wg)
+		go runSim(fileName, wg)
 	}
 
 	wg.Wait()
-	slog.Info("done")
 }
 
-// TODO: general error handling, right now it panics
-func request(fileHash string, wg *sync.WaitGroup) {
+func runSim(fileHash string, wg *sync.WaitGroup) {
+	slog.Info("requesting.", "file-name", fileHash)
+
+	start := time.Now()
+
+	fileSize, err := request(fileHash, wg)
+	if err != nil {
+		slog.Error(
+			"failed to request file.",
+			"file-name", fileHash,
+			"err", err,
+		)
+		return
+	}
+
+	// TODO: for Emily - add telemetry here
+	dur := time.Since(start)
+
+	slog.Info(
+		"file request complete.",
+		"file-name", fileHash,
+		"file-size", humanize.Bytes(uint64(fileSize)),
+		"duration", dur,
+	)
+}
+
+// request the file, returns (file size, error)
+func request(fileHash string, wg *sync.WaitGroup) (int64, error) {
 	defer wg.Done()
 
-	slog.Info("requesting", "file", fileHash)
-
 	// open socket to load balancer
-	lbConn, err := net.Dial(network.ProtoTcp4, LBNodeAddr)
+	lbConn, err := net.Dial(network.ProtoTcp4, lbNodeAddr)
 	if err != nil {
-		panic(err)
+		return 0, fmt.Errorf("failed to dial load balancer: %v", err)
 	}
 
 	defer lbConn.Close()
 
 	if _, err := lbConn.Write([]byte{network.UserNodeJoin}); err != nil {
-		panic(err)
+		return 0, fmt.Errorf("failed ping load balancer: %v", err)
 	}
 
-	slog.Info("connected to LB.", "remote_addr", lbConn.RemoteAddr())
+	// slog.Info("connected to LB.", "remote_addr", lbConn.RemoteAddr())
 
-	var buf [0xff]byte
+	// 64 bytes, 32 byte file hash, 32 byte pub key
+	var buf [64]byte
+
 	n, err := lbConn.Read(buf[:])
 	if err != nil {
-		panic(err)
+		return 0, fmt.Errorf("failed receive message from load balancer: %v", err)
 	}
 
 	if n != 6 {
-		panic("protocol violation, expecting 6 bytes only.")
+		return 0, errors.New("protocol violation, expecting 6 bytes only.")
 	}
 
 	// dialing data node
 	dataNodeAddr, err := network.BytesToAddr(buf[:n])
 	if err != nil {
-		panic(err)
+		return 0, fmt.Errorf("invalid network address: %v", buf[:n])
 	}
 
 	dataConn, err := net.DialTCP(network.ProtoTcp4, nil, dataNodeAddr.(*net.TCPAddr))
 	if err != nil {
-		panic(err)
+		return 0, fmt.Errorf("failed to dail data node: %v", err)
 	}
 
-	slog.Info(
-		"data node connected.",
-		"addr", dataConn.RemoteAddr(),
-		"protocol", dataConn.RemoteAddr().Network(),
-	)
+	/*
+		slog.Info(
+			"data node connected.",
+			"addr", dataConn.RemoteAddr(),
+			"protocol", dataConn.RemoteAddr().Network(),
+		)
+	*/
 	defer dataConn.Close()
 
 	// sending file name + pub key
 	if _, err := hex.Decode(buf[:32], []byte(fileHash)); err != nil {
-		panic(err)
+		return 0, fmt.Errorf("invalid file hash: %s", fileHash)
 	}
 
 	copy(buf[32:], crypto.UserPublicKey[:])
 
 	if _, err := dataConn.Write(buf[:64]); err != nil {
-		panic(err)
-	}
-	slog.Info("file name + pub key sent", "addr", dataConn.RemoteAddr())
-
-	// write responses to file
-	filePath := database.AccessUser.Append(fileHash).String()
-	fileOut, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
-	if err != nil {
-		panic(err)
+		return 0, fmt.Errorf("failed to write to datanode; %v", err)
 	}
 
-	defer fileOut.Close()
+	// slog.Info("file name + pub key sent", "addr", dataConn.RemoteAddr())
 
-	byteRecv, err := io.Copy(fileOut, dataConn)
-	if err != nil {
-		panic(err)
-	}
-
-	// file validation, integrity check:
-	// hash the content then check the digest against the file name
-	if _, err := fileOut.Seek(0, 0); err != nil {
-		panic(err)
-	}
-
+	// write responses to hasher
 	h := blake3.New(32, nil)
-	if _, err := io.Copy(h, fileOut); err != nil {
-		panic(err)
+
+	byteCopied, err := io.Copy(h, dataConn)
+	if err != nil {
+		return 0, fmt.Errorf("failed to write to hasher; %v", err)
 	}
 
+	// hash the content then check the digest against the file name
 	digest := h.Sum(nil)
-
 	if !byteEqual(digest, buf[:32]) {
-		panic("file integrity violation")
+		return 0, errors.New("file integrity violation")
 	}
 
-	slog.Info(
-		"file request completed.",
-		"file-hash", fileHash,
-		"file-path", filePath,
-		"file-size", humanize.Bytes(uint64(byteRecv)),
-	)
+	/*
+		slog.Info(
+			"file request completed.",
+			"file-hash", fileHash,
+			"file-size", humanize.Bytes(uint64(byteCopied)),
+		)
+	*/
+
+	return byteCopied, nil
 }
 
 func byteEqual(buf1, buf2 []byte) bool {
