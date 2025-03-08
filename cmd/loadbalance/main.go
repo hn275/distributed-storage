@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 
+	"github.com/hn275/distributed-storage/internal"
 	"github.com/hn275/distributed-storage/internal/algo"
 	"github.com/hn275/distributed-storage/internal/config"
 	"github.com/hn275/distributed-storage/internal/network"
@@ -22,7 +23,7 @@ var (
 )
 
 func main() {
-	conf, err := config.NewLBConfig("config.yml")
+	conf, err := config.NewLBConfig(internal.ConfigFilePath)
 	if err != nil {
 		log.Fatalf("failed to read config. %v", err)
 	}
