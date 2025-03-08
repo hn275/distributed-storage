@@ -20,8 +20,9 @@ import (
 	"lukechampine.com/blake3"
 )
 
+var lbNodeAddr string
+
 func main() {
-	var lbNodeAddr string
 
 	flag.StringVar(&lbNodeAddr, "lbaddr", "127.0.0.1:8000", "address of the loadbalancer")
 	flag.Parse()

@@ -17,7 +17,7 @@ func main() {
 	flag.StringVar(&lbNodeAddr, "addr", "127.0.0.1:8000", "Load Balancing address")
 	flag.Parse()
 
-	config, err := config.NewClusterConfig(internal.ConfigFilePath)
+	conf, err := config.NewClusterConfig(internal.ConfigFilePath)
 	if err != nil {
 		panic(err)
 	}
@@ -25,14 +25,14 @@ func main() {
 	// initialize cluster
 	slog.Info(
 		"initializing cluster.",
-		"node-count", config.Node,
+		"node-count", conf.Node,
 		"load-balancer-addr", lbNodeAddr,
 	)
 
 	wg := new(sync.WaitGroup)
-	wg.Add(int(config.Node))
+	wg.Add(int(conf.Node))
 
-	for nodeID := uint16(0); nodeID < config.Node; nodeID++ {
+	for nodeID := uint16(0); nodeID < conf.Node; nodeID++ {
 		go func(wg *sync.WaitGroup, nodeIndex uint16) {
 			defer wg.Done()
 
