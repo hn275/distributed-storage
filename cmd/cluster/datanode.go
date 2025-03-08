@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/hex"
+	"errors"
 	"log/slog"
 	"net"
 	"os"
+	"time"
 
 	"github.com/hn275/distributed-storage/internal/crypto"
 	"github.com/hn275/distributed-storage/internal/database"
@@ -58,7 +60,7 @@ func (dataNode *dataNode) Listen() {
 
 		switch buf[0] {
 		case network.UserNodeJoin:
-			go dataNode.handleUserNodeJoin()
+			go requestSim(dataNode)
 
 		default:
 			slog.Error("unsupported request.", "request", buf[0])
@@ -67,64 +69,62 @@ func (dataNode *dataNode) Listen() {
 	}
 }
 
-func (dataNode *dataNode) handleUserNodeJoin() {
+func requestSim(d *dataNode) {
+	start := time.Now()
+
+	bytesWritten, err := d.handleUserNodeJoin()
+	if err != nil {
+		slog.Error("failed to service user.", "err", err)
+		return
+	}
+
+	dur := time.Since(start)
+	// TODO: for Yasmin - add telemetry
+
+	slog.Info("finished service user.", "file-size", bytesWritten, "duration", dur)
+}
+
+func (dataNode *dataNode) handleUserNodeJoin() (int, error) {
 	// open a new port for user to dial
 	soc, err := net.Listen(network.ProtoTcp4, ":0")
 	if err != nil {
-		slog.Error("failed to open new socket", "err", err)
-		return
+		return 0, err
 	}
 
 	defer soc.Close()
 
-	// send port number to LB
+	// send port addr to LB
 	var addrBuf [6]byte // 4 bytes for ipv4, 2 bytes for port
 
 	addr, ok := soc.Addr().(*net.TCPAddr)
 	if !ok {
-		slog.Error("returned type is not net.TCPAddr")
-		return
+		return 0, errors.New("invalid TCP address")
 	}
 
 	if err := network.AddrToBytes(addr, addrBuf[:]); err != nil {
-		slog.Error(
-			"error converting ip address (addr) to bytes.",
-			"addr", addr,
-			"err", err,
-		)
-		return
+		return 0, err
 	}
 
 	if _, err := dataNode.Write(addrBuf[:]); err != nil {
-		slog.Error(
-			"failed to write to LB.",
-			"err", err,
-		)
-		return
+		return 0, err
 	}
 
 	// handling user connection
-	slog.Info("waiting for user connection.",
-		"addr", soc.Addr().String(),
-		"protocol", soc.Addr().Network(),
-	)
+	slog.Info("waiting for user connection.", "listener-addr", soc.Addr())
 
 	user, err := soc.Accept()
 	if err != nil {
-		panic(err)
+		return 0, err
 	}
 
-	slog.Info("user connected.",
-		"addr", user.RemoteAddr(),
-		"protocol", user.RemoteAddr().Network(),
-	)
-
 	defer user.Close()
+
+	slog.Info("user connected.", "addr", user.RemoteAddr())
 
 	// get file digest + pub key from user
 	var buf [64]byte
 	if _, err := user.Read(buf[:]); err != nil {
-		panic(err)
+		return 0, err
 	}
 
 	fileName := hex.EncodeToString(buf[:32])
@@ -133,7 +133,7 @@ func (dataNode *dataNode) handleUserNodeJoin() {
 	// read + decrypt file
 	fileContent, err := os.ReadFile(filePath)
 	if err != nil {
-		panic(err)
+		return 0, err
 	}
 
 	var (
@@ -150,15 +150,16 @@ func (dataNode *dataNode) handleUserNodeJoin() {
 	)
 
 	if err != nil {
-		panic(err)
+		return 0, err
 	}
 
 	// send it over the wire
 	plaintext := fileContent[crypto.NonceSize : len(fileContent)-crypto.OverHead]
 
-	if _, err := user.Write(plaintext); err != nil {
-		panic(err)
+	n, err := user.Write(plaintext)
+	if err != nil {
+		return 0, err
 	}
 
-	slog.Info("user service complete.", "addr", user.RemoteAddr())
+	return n, nil
 }
