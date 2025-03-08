@@ -3,11 +3,10 @@ package main
 import (
 	"flag"
 	"log/slog"
-	"os"
 	"sync"
 
+	"github.com/hn275/distributed-storage/internal"
 	"github.com/hn275/distributed-storage/internal/config"
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -18,18 +17,8 @@ func main() {
 	flag.StringVar(&lbNodeAddr, "addr", "127.0.0.1:8000", "Load Balancing address")
 	flag.Parse()
 
-	config, err := config.NewClusterConfig("config.yml")
+	config, err := config.NewClusterConfig(internal.ConfigFilePath)
 	if err != nil {
-		panic(err)
-	}
-
-	configFd, err := os.OpenFile("config.yml", os.O_RDONLY, 0666)
-	if err != nil {
-		panic(err)
-	}
-	defer configFd.Close()
-
-	if err := yaml.NewDecoder(configFd).Decode(&config); err != nil {
 		panic(err)
 	}
 
