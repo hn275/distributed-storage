@@ -1,7 +1,13 @@
 user:
+  x-small: 10
+  small: 10
+  medium: 10
+  large: 10
+  x-large: 5
+  xx-large: 5
 
 cluster:
-  node: 100
+  node: 10
 
 load-balancer:
   algo: simple-round-robin

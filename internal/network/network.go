@@ -10,6 +10,7 @@ import (
 const (
 	DataNodeJoin = iota
 	UserNodeJoin
+	ShutdownSig
 
 	ProtoTcp4 string = "tcp4"
 )
