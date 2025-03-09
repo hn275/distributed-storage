@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -103,6 +104,49 @@ func (lb *loadBalancer) nodeJoinQuery(signal *chanSignal) {
 }
 
 // server handlers
+
+// listener
+func (lbSrv *loadBalancer) listen() {
+	var buf [0xff]byte
+	for {
+		conn, err := lbSrv.Accept()
+		if err != nil {
+			logger.Error("failed to accept new conn.",
+				"peer", conn.RemoteAddr,
+				"err", err,
+			)
+			continue
+		}
+
+		if _, err = conn.Read(buf[:]); err != nil {
+			// silent continue if peer disconnected
+			if !errors.Is(err, io.EOF) {
+				logger.Error("failed to read from socket.",
+					"remote_addr", conn.RemoteAddr(),
+					"err", err,
+				)
+			}
+			continue
+		}
+
+		switch buf[0] {
+		case network.DataNodeJoin:
+			logger.Info("new data node.", "remote_addr", conn.RemoteAddr())
+			go handle(conn, lbSrv.nodeJoinHandler)
+
+		case network.UserNodeJoin:
+			logger.Info("new user.", "remote_addr", conn.RemoteAddr())
+			go handle(conn, lbSrv.userJoinHandler)
+
+		case network.ShutdownSig:
+			return
+
+		default:
+			logger.Error("unsupported ping message type.", "msgtype", buf[0])
+			closeConn(conn)
+		}
+	}
+}
 
 func (lb *loadBalancer) userJoinHandler(user net.Conn) error {
 	defer user.Close()

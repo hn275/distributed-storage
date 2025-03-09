@@ -57,42 +57,10 @@ func main() {
 	)
 
 	// serving
-	var buf [0xff]byte
-	for {
-		conn, err := lbSrv.Accept()
-		if err != nil {
-			logger.Error("failed to accept new conn.",
-				"peer", conn.RemoteAddr,
-				"err", err,
-			)
-			continue
-		}
+	lbSrv.listen()
 
-		if _, err = conn.Read(buf[:]); err != nil {
-			// silent continue if peer disconnected
-			if !errors.Is(err, io.EOF) {
-				logger.Error("failed to read from socket.",
-					"remote_addr", conn.RemoteAddr(),
-					"err", err,
-				)
-			}
-			continue
-		}
-
-		switch buf[0] {
-		case network.DataNodeJoin:
-			logger.Info("new data node.", "remote_addr", conn.RemoteAddr())
-			go handle(conn, lbSrv.nodeJoinHandler)
-
-		case network.UserNodeJoin:
-			logger.Info("new user.", "remote_addr", conn.RemoteAddr())
-			go handle(conn, lbSrv.userJoinHandler)
-
-		default:
-			logger.Error("unsupported ping message type.", "msgtype", buf[0])
-			closeConn(conn)
-		}
-	}
+	// TODO: write telemetry data out
+	slog.Info("end of simulation")
 }
 
 type lbHandler func(net.Conn) error
