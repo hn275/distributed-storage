@@ -35,7 +35,7 @@ func main() {
 	slog.Info("Load balancing address.", "lbaddr", lbNodeAddr)
 
 	// load config
-	_, err := config.NewUserConfig(internal.ConfigFilePath)
+	userConf, err := config.NewUserConfig(internal.ConfigFilePath)
 	if err != nil {
 		panic(err)
 	}
@@ -46,20 +46,15 @@ func main() {
 		panic(err)
 	}
 
-	fileNames := [...]string{
-		fileIndex.Xsmall,
-		fileIndex.Small,
-		fileIndex.Medium,
-		fileIndex.Large,
-		fileIndex.Xlarge,
-		fileIndex.XXlarge,
-	}
-
 	wg := new(sync.WaitGroup)
-	wg.Add(len(fileNames))
 
-	for _, fileName := range fileNames {
-		go runSim(fileName, wg)
+	// requesting files
+	for fileName, freq := range userConf.GetFiles(fileIndex) {
+		slog.Info("requesting file.", "file-name", fileName, "freq", freq)
+		wg.Add(freq)
+		for i := 0; i < freq; i++ {
+			go runSim(fileName, wg)
+		}
 	}
 
 	wg.Wait()
@@ -80,8 +75,6 @@ func main() {
 }
 
 func runSim(fileHash string, wg *sync.WaitGroup) {
-	slog.Info("requesting.", "file-name", fileHash)
-
 	start := time.Now()
 
 	fileSize, err := request(fileHash, wg)

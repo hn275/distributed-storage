@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -11,7 +10,6 @@ import (
 	"github.com/hn275/distributed-storage/internal"
 	"github.com/hn275/distributed-storage/internal/algo"
 	"github.com/hn275/distributed-storage/internal/config"
-	"github.com/hn275/distributed-storage/internal/network"
 )
 
 var (
@@ -38,17 +36,12 @@ func main() {
 	lbAlgo.Initialize()
 	log.Printf("load balancing algorithm: %s\n", conf.Algorithm)
 
-	// open listening socket
-	portStr := fmt.Sprintf(":%d", conf.LocalPort)
-	soc, err := net.Listen(network.ProtoTcp4, portStr)
-
+	lbSrv, err := newLB(int(conf.LocalPort), lbAlgo)
 	if err != nil {
 		log.Fatalf("failed to open listening socket: %W", err)
 	}
 
-	lbSrv := &loadBalancer{soc, lbAlgo, make(chan chanSignal, 128)}
 	defer lbSrv.Close()
-	go lbSrv.queryServer()
 
 	logger.Info(
 		"node started, waiting for services.",

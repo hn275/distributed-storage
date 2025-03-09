@@ -4,107 +4,33 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
+	"sync"
 
 	"github.com/hn275/distributed-storage/internal/algo"
 	"github.com/hn275/distributed-storage/internal/network"
 )
 
-type chanOpCode int
-
-const (
-	chanOpCode_nodeJoin = chanOpCode(iota)
-	chanOpCode_nodeDispatch
-	chanOpCode_response
-)
-
-type chanSignal struct {
-	opCode chanOpCode
-	// nullable
-	conn net.Conn
-	err  error
-}
-
 type loadBalancer struct {
 	net.Listener
-	engine   algo.LBAlgo
-	connChan chan chanSignal
+	engine algo.LBAlgo
+	lock   *sync.Mutex
 }
 
-// query server
-
-func (lb *loadBalancer) queryServer() {
-	defer func() {
-		slog.Info("closing query server.")
-		close(lb.connChan)
-	}()
-
-	slog.Info("query server waiting for requests")
-	for signal := range lb.connChan {
-		switch signal.opCode {
-
-		case chanOpCode_nodeJoin:
-			lb.nodeJoinQuery(&signal)
-
-		case chanOpCode_nodeDispatch:
-			lb.nodeDispatchQuery()
-
-		default:
-			lb.connChan <- chanSignal{
-				opCode: chanOpCode_response,
-				conn:   nil,
-				err:    fmt.Errorf("unhandled op code: %d", signal.opCode),
-			}
-
-		}
-	}
-}
-
-func (lb *loadBalancer) nodeDispatchQuery() {
-	// query for free node's address
-	nodeConn, err := lb.engine.GetNode()
+func newLB(port int, algorithm algo.LBAlgo) (*loadBalancer, error) {
+	// open listening socket
+	portStr := fmt.Sprintf(":%d", port)
+	soc, err := net.Listen(network.ProtoTcp4, portStr)
 
 	if err != nil {
-		lb.connChan <- chanSignal{
-			opCode: chanOpCode_response,
-			conn:   nil,
-			err:    err,
-		}
-
-		return
+		return nil, err
 	}
 
-	if nodeConn == nil {
-		lb.connChan <- chanSignal{
-			opCode: chanOpCode_response,
-			conn:   nil,
-			err:    fmt.Errorf("nodeConn nil??"),
-		}
-		return
-	}
-
-	lb.connChan <- chanSignal{
-		opCode: chanOpCode_response,
-		conn:   nodeConn,
-		err:    err,
-	}
-}
-
-func (lb *loadBalancer) nodeJoinQuery(signal *chanSignal) {
-	if signal.conn == nil {
-		panic("invalid signal, required signal.conn and signal.connChan")
-	}
-
-	lb.connChan <- chanSignal{
-		opCode: chanOpCode_response,
-		conn:   nil,
-		err:    lb.engine.NodeJoin(signal.conn),
-	}
+	lbSrv := &loadBalancer{soc, algorithm, new(sync.Mutex)}
+	return lbSrv, nil
 }
 
 // server handlers
-
 // listener
 func (lbSrv *loadBalancer) listen() {
 	var buf [0xff]byte
@@ -152,39 +78,28 @@ func (lb *loadBalancer) userJoinHandler(user net.Conn) error {
 	defer user.Close()
 
 	// request for a data node
-	lb.connChan <- chanSignal{chanOpCode_nodeDispatch, nil, nil}
+	lb.lock.Lock()
+	node, err := lb.engine.GetNode()
+	lb.lock.Unlock()
 
-	sig := <-lb.connChan
-	if sig.err != nil {
-		return sig.err
-	}
-
-	if sig.conn == nil {
-		return fmt.Errorf("nil node connection.")
-	}
-
-	// port fowarding
-	_, err := sig.conn.Write([]byte{network.UserNodeJoin})
 	if err != nil {
 		return err
 	}
 
-	_, err = io.CopyN(user, sig.conn, 6)
+	// port fowarding
+	_, err = node.Write([]byte{network.UserNodeJoin})
+	if err != nil {
+		return err
+	}
+
+	_, err = io.CopyN(user, node, 6)
 
 	return err
 }
 
 func (lb *loadBalancer) nodeJoinHandler(node net.Conn) error {
-	nodeJoinSignal := chanSignal{
-		chanOpCode_nodeJoin,
-		node,
-		nil,
-	}
-
-	lb.connChan <- nodeJoinSignal
-	if err := (<-lb.connChan).err; err != nil {
-		return err
-	}
-
-	return nil
+	lb.lock.Lock()
+	err := lb.engine.NodeJoin(node)
+	lb.lock.Unlock()
+	return err
 }
