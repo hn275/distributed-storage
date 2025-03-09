@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 
+	"github.com/hn275/distributed-storage/internal/database"
 	"gopkg.in/yaml.v3"
 )
 
@@ -21,7 +22,14 @@ type loadbalancerYaml struct {
 	LocalPort uint16 `yaml:"local-port"`
 }
 
-type userYaml struct{}
+type userYaml struct {
+	Xsmall  int `yaml:"x-small"`
+	Small   int `yaml:"small"`
+	Medium  int `yaml:"medium"`
+	Large   int `yaml:"large"`
+	Xlarge  int `yaml:"x-large"`
+	XXlarge int `yaml:"xx-large"`
+}
 
 func NewLBConfig(filePath string) (*loadbalancerYaml, error) {
 	conf := &config{}
@@ -57,6 +65,19 @@ func NewUserConfig(filePath string) (*userYaml, error) {
 		return nil, err
 	}
 	return &conf.User, nil
+}
+
+func (u *userYaml) GetFiles(db *database.FileIndex) map[string]int {
+	files := make(map[string]int)
+
+	files[db.Xsmall] = u.Xsmall
+	files[db.Small] = u.Small
+	files[db.Medium] = u.Medium
+	files[db.Large] = u.Large
+	files[db.Xlarge] = u.Xlarge
+	files[db.XXlarge] = u.XXlarge
+
+	return files
 }
 
 func readConfig(confBuf *config, filePath string) error {
