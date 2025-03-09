@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/hex"
 	"errors"
+	"io"
 	"log/slog"
 	"net"
 	"os"
@@ -17,6 +18,8 @@ type dataNode struct {
 	net.Conn
 	id uint16
 }
+
+var nodeJoinSignal = [1]byte{network.DataNodeJoin}
 
 func nodeInitialize(lbAddr string, nodeID uint16) (*dataNode, error) {
 	laddr, err := net.ResolveTCPAddr(network.ProtoTcp4, ":0") // randomize the port
@@ -35,7 +38,7 @@ func nodeInitialize(lbAddr string, nodeID uint16) (*dataNode, error) {
 		return nil, err
 	}
 
-	if _, err := lbSoc.Write([]byte{network.DataNodeJoin}); err != nil {
+	if _, err := lbSoc.Write(nodeJoinSignal[:]); err != nil {
 		return nil, err
 	}
 
@@ -47,14 +50,19 @@ func nodeInitialize(lbAddr string, nodeID uint16) (*dataNode, error) {
 func (dataNode *dataNode) Listen() {
 	defer dataNode.Close()
 
-	// 4 bytes for the address, 2 bytes for the port
-	var buf [6]byte
-
+	var buf [1]byte
 	for {
 		// get a request from LB
 		_, err := dataNode.Read(buf[:])
 		if err != nil {
-			slog.Error("failed to read from LB.", "err", err)
+			if errors.Is(err, io.EOF) {
+				slog.Info(
+					"load balancer disconnected.",
+					"node-id", dataNode.id,
+				)
+			} else {
+				slog.Error("failed to read from LB.", "err", err)
+			}
 			return
 		}
 

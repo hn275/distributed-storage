@@ -20,7 +20,12 @@ import (
 	"lukechampine.com/blake3"
 )
 
-var lbNodeAddr string
+var (
+	lbNodeAddr string
+
+	shutdownSignal = [...]byte{network.ShutdownSig}
+	userJoinSignal = [...]byte{network.UserNodeJoin}
+)
 
 func main() {
 
@@ -30,7 +35,7 @@ func main() {
 	slog.Info("Load balancing address.", "lbaddr", lbNodeAddr)
 
 	// load config
-	_, err := config.NewUserConfig(internal.ConfigFilePath)
+	userConf, err := config.NewUserConfig(internal.ConfigFilePath)
 	if err != nil {
 		panic(err)
 	}
@@ -41,28 +46,35 @@ func main() {
 		panic(err)
 	}
 
-	fileNames := [...]string{
-		fileIndex.Xsmall,
-		fileIndex.Small,
-		fileIndex.Medium,
-		fileIndex.Large,
-		fileIndex.Xlarge,
-		fileIndex.XXlarge,
-	}
-
 	wg := new(sync.WaitGroup)
-	wg.Add(len(fileNames))
 
-	for _, fileName := range fileNames {
-		go runSim(fileName, wg)
+	// requesting files
+	for fileName, freq := range userConf.GetFiles(fileIndex) {
+		slog.Info("requesting file.", "file-name", fileName, "freq", freq)
+		wg.Add(freq)
+		for i := 0; i < freq; i++ {
+			go runSim(fileName, wg)
+		}
 	}
 
 	wg.Wait()
+
+	// send shutdown signal to load balancer
+
+	// open socket to load balancer
+	lbConn, err := net.Dial(network.ProtoTcp4, lbNodeAddr)
+	if err != nil {
+		panic(err)
+	}
+
+	defer lbConn.Close()
+
+	if _, err := lbConn.Write(shutdownSignal[:]); err != nil {
+		panic(err)
+	}
 }
 
 func runSim(fileHash string, wg *sync.WaitGroup) {
-	slog.Info("requesting.", "file-name", fileHash)
-
 	start := time.Now()
 
 	fileSize, err := request(fileHash, wg)
@@ -98,7 +110,7 @@ func request(fileHash string, wg *sync.WaitGroup) (int64, error) {
 
 	defer lbConn.Close()
 
-	if _, err := lbConn.Write([]byte{network.UserNodeJoin}); err != nil {
+	if _, err := lbConn.Write(userJoinSignal[:]); err != nil {
 		return 0, fmt.Errorf("failed ping load balancer: %v", err)
 	}
 

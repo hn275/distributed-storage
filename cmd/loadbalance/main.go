@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -11,7 +10,6 @@ import (
 	"github.com/hn275/distributed-storage/internal"
 	"github.com/hn275/distributed-storage/internal/algo"
 	"github.com/hn275/distributed-storage/internal/config"
-	"github.com/hn275/distributed-storage/internal/network"
 )
 
 var (
@@ -38,17 +36,12 @@ func main() {
 	lbAlgo.Initialize()
 	log.Printf("load balancing algorithm: %s\n", conf.Algorithm)
 
-	// open listening socket
-	portStr := fmt.Sprintf(":%d", conf.LocalPort)
-	soc, err := net.Listen(network.ProtoTcp4, portStr)
-
+	lbSrv, err := newLB(int(conf.LocalPort), lbAlgo)
 	if err != nil {
 		log.Fatalf("failed to open listening socket: %W", err)
 	}
 
-	lbSrv := &loadBalancer{soc, lbAlgo, make(chan chanSignal, 128)}
 	defer lbSrv.Close()
-	go lbSrv.queryServer()
 
 	logger.Info(
 		"node started, waiting for services.",
@@ -57,42 +50,10 @@ func main() {
 	)
 
 	// serving
-	var buf [0xff]byte
-	for {
-		conn, err := lbSrv.Accept()
-		if err != nil {
-			logger.Error("failed to accept new conn.",
-				"peer", conn.RemoteAddr,
-				"err", err,
-			)
-			continue
-		}
+	lbSrv.listen()
 
-		if _, err = conn.Read(buf[:]); err != nil {
-			// silent continue if peer disconnected
-			if !errors.Is(err, io.EOF) {
-				logger.Error("failed to read from socket.",
-					"remote_addr", conn.RemoteAddr(),
-					"err", err,
-				)
-			}
-			continue
-		}
-
-		switch buf[0] {
-		case network.DataNodeJoin:
-			logger.Info("new data node.", "remote_addr", conn.RemoteAddr())
-			go handle(conn, lbSrv.nodeJoinHandler)
-
-		case network.UserNodeJoin:
-			logger.Info("new user.", "remote_addr", conn.RemoteAddr())
-			go handle(conn, lbSrv.userJoinHandler)
-
-		default:
-			logger.Error("unsupported ping message type.", "msgtype", buf[0])
-			closeConn(conn)
-		}
-	}
+	// TODO: write telemetry data out
+	slog.Info("end of simulation")
 }
 
 type lbHandler func(net.Conn) error
