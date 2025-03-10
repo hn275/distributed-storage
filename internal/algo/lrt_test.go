@@ -1,13 +1,16 @@
 package algo
 
 import (
+	"container/heap"
+	"fmt"
+	"log"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestLeastResponseTimeSortInterface(t *testing.T) {
-	lrt := make(LeastResponseTime, 6)
+	lrt := make(LeastResponseTime, 7)
 
 	lrt[0] = &LRTNode{&testStruct{}, 1.0}
 	lrt[1] = &LRTNode{&testStruct{}, 1.1}
@@ -15,6 +18,7 @@ func TestLeastResponseTimeSortInterface(t *testing.T) {
 	lrt[3] = &LRTNode{&testStruct{}, 1.3}
 	lrt[4] = &LRTNode{&testStruct{}, 1.4}
 	lrt[5] = &LRTNode{&testStruct{}, 1.4}
+	lrt[6] = &LRTNode{&testStruct{}, 0.4}
 
 	// Len()
 	assert.Equal(t, len(lrt), lrt.Len())
@@ -37,4 +41,11 @@ func TestLeastResponseTimeSortInterface(t *testing.T) {
 	lrt.Swap(0, 3)
 	assert.Equal(t, 1.3, lrt[0].avgResponseTime)
 	assert.Equal(t, 1.0, lrt[3].avgResponseTime)
+
+	// heapify
+	heap.Init(lrt)
+	log.Println("heap.Init:")
+	for i, v := range lrt {
+		fmt.Println(i, v.avgResponseTime)
+	}
 }

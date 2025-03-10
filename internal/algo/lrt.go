@@ -26,15 +26,17 @@ func (lrt LeastResponseTime) Less(i, j int) bool {
 
 // LeastResponseTime implements sort.Interface
 func (lrt LeastResponseTime) Swap(i, j int) {
-	tmp := lrt[i]
-	lrt[i] = lrt[j]
-	lrt[j] = tmp
+	lrt[i], lrt[j] = lrt[j], lrt[i]
 }
 
 // LeastResponseTime implements heap.Interface
-func (lrt LeastResponseTime) Push(node *LRTNode) {}
+// since nodes aren't joining/leaving, no need to implement
+func (lrt LeastResponseTime) Push(x any) {
+	panic("not implemented")
+}
 
 // LeastResponseTime implements heap.Interface
-func (lrt LeastResponseTime) Pop() *LRTNode {
-	return nil
+// since nodes aren't joining/leaving, no need to implement
+func (lrt LeastResponseTime) Pop() any {
+	panic("not implemented")
 }
