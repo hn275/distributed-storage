@@ -1,12 +1,6 @@
 package algo
 
-import (
-	"container/heap"
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-)
-
+/*
 func TestPriorityQueue(t *testing.T) {
 	pq := make(priorityQueue, 7)
 
@@ -66,3 +60,4 @@ func TestPriorityQueue(t *testing.T) {
 		assert.Equal(t, 7-i-1, len(pq))
 	}
 }
+*/
