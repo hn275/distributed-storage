@@ -1,16 +1,29 @@
 package algo
 
-/*
+import (
+	"container/heap"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+type testPQ struct{ float64 }
+
+func (tpq *testPQ) less(other queueNodeCmp) bool {
+	otherNode := other.(*testPQ)
+	return tpq.float64 < otherNode.float64
+}
+
 func TestPriorityQueue(t *testing.T) {
 	pq := make(priorityQueue, 7)
 
-	pq[0] = queueNode{nil, 1.0}
-	pq[1] = queueNode{nil, 1.1}
-	pq[2] = queueNode{nil, 1.2}
-	pq[3] = queueNode{nil, 1.3}
-	pq[4] = queueNode{nil, 1.4}
-	pq[5] = queueNode{nil, 1.4}
-	pq[6] = queueNode{nil, 0.4}
+	pq[0] = queueNode{&testPQ{1.0}}
+	pq[1] = queueNode{&testPQ{1.1}}
+	pq[2] = queueNode{&testPQ{1.2}}
+	pq[3] = queueNode{&testPQ{1.3}}
+	pq[4] = queueNode{&testPQ{1.4}}
+	pq[5] = queueNode{&testPQ{1.4}}
+	pq[6] = queueNode{&testPQ{0.4}}
 
 	// Len()
 	assert.Equal(t, len(pq), pq.Len())
@@ -29,18 +42,18 @@ func TestPriorityQueue(t *testing.T) {
 
 	// Swap(i, j int)
 	pq.Swap(0, 3)
-	assert.Equal(t, 1.3, pq[0].weight)
-	assert.Equal(t, 1.0, pq[3].weight)
+	assert.Equal(t, 1.3, pq[0].node.(*testPQ).float64)
+	assert.Equal(t, 1.0, pq[3].node.(*testPQ).float64)
 
 	// heapify
 	heap.Init(&pq)
-	assert.Equal(t, 0.4, pq[0].weight)
+	assert.Equal(t, 0.4, pq[0].node.(*testPQ).float64)
 
 	// mod the first element
-	pq[4] = queueNode{nil, 0.0}
+	pq[4] = queueNode{&testPQ{0.0}}
 
 	heap.Init(&pq)
-	assert.Equal(t, float64(0), pq[0].weight)
+	assert.Equal(t, float64(0), pq[0].node.(*testPQ).float64)
 
 	// min value popping
 	expectedMinSequence := [7]float64{
@@ -55,9 +68,8 @@ func TestPriorityQueue(t *testing.T) {
 
 	for i, expected := range expectedMinSequence {
 		node := heap.Pop(&pq).(queueNode)
-		assert.Equal(t, expected, node.weight)
+		assert.Equal(t, expected, node.node.(*testPQ).float64)
 		assert.Equal(t, 7-i-1, pq.Len())
 		assert.Equal(t, 7-i-1, len(pq))
 	}
 }
-*/

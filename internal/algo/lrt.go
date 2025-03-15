@@ -6,6 +6,7 @@ import (
 	"net"
 )
 
+// A node for least response time algo
 type LRTNode struct {
 	net.Conn
 	requests uint64
@@ -13,12 +14,12 @@ type LRTNode struct {
 	avgRT float64
 }
 
-type LeastResponseTime []*LRTNode
-
-// LeastResponseTime implements sort.Interface. This math assume NaN to be the
-// smallest value, see https://pkg.go.dev/sort#Float64Slice.Less
-func (lrt LeastResponseTime) Less(i, j int) bool {
-	left, right := lrt[i], lrt[j]
+// LRTNode implements queueNodeCmp
+func (left *LRTNode) less(other queueNodeCmp) bool {
+	right, ok := other.(*LRTNode)
+	if !ok {
+		panic("invalid type, expected '*LRTNode'")
+	}
 
 	if left.avgRT == right.avgRT {
 		return left.requests < right.requests
@@ -27,32 +28,8 @@ func (lrt LeastResponseTime) Less(i, j int) bool {
 	return left.avgRT < right.avgRT
 }
 
-// LeastResponseTime implements sort.Interface
-func (lrt LeastResponseTime) Swap(i, j int) {
-	lrt[i], lrt[j] = lrt[j], lrt[i]
-}
-
-// priorityQueue implements heap.Interface
-func (lrt LeastResponseTime) Len() int {
-	return len(lrt)
-}
-
-// LeastResponseTime implements heap.Interface
-func (lrt *LeastResponseTime) Push(x any) {
-	node, ok := x.(*LRTNode)
-	if !ok {
-		panic("invalid interface, expected `queueNode`")
-	}
-	heap.Push(lrt, node)
-}
-
-// LeastResponseTime implements heap.Interface
-// since nodes aren't joining/leaving, no need to implement
-func (pq *LeastResponseTime) Pop() any {
-	n := len(*pq) - 1
-	node := (*pq)[n]
-	*pq = (*pq)[:n]
-	return node
+type LeastResponseTime struct {
+	priorityQueue
 }
 
 // LeastResponseTime implements LBAlgo
@@ -62,12 +39,10 @@ func (lrt *LeastResponseTime) Initialize() {
 
 // LeastResponseTime implements LBAlgo
 func (lrt *LeastResponseTime) NodeJoin(conn net.Conn) error {
-	node := &LRTNode{
-		Conn:     conn,
-		requests: 0,
-		avgRT:    0.0,
+	qNode := queueNode{
+		node: &LRTNode{conn, 0, 0.0},
 	}
-	heap.Push(lrt, node)
+	heap.Push(lrt, qNode)
 	return nil
 }
 
