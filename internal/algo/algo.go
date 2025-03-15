@@ -1,7 +1,6 @@
 package algo
 
 import (
-	"container/heap"
 	"net"
 )
 
@@ -43,7 +42,7 @@ func (pq *priorityQueue) Push(x any) {
 	if !ok {
 		panic("invalid interface, expected `queueNode`")
 	}
-	heap.Push(pq, node)
+	*pq = append(*pq, node)
 }
 
 // priorityQueue implements heap.Interface

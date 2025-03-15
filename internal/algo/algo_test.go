@@ -2,6 +2,8 @@ package algo
 
 import (
 	"container/heap"
+	"math/rand"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +16,7 @@ func (tpq *testPQ) less(other queueNodeCmp) bool {
 	return tpq.float64 < otherNode.float64
 }
 
-func TestPriorityQueue(t *testing.T) {
+func TestPriorityQueueSortInterface(t *testing.T) {
 	pq := make(priorityQueue, 7)
 
 	pq[0] = queueNode{&testPQ{1.0}}
@@ -44,32 +46,40 @@ func TestPriorityQueue(t *testing.T) {
 	pq.Swap(0, 3)
 	assert.Equal(t, 1.3, pq[0].node.(*testPQ).float64)
 	assert.Equal(t, 1.0, pq[3].node.(*testPQ).float64)
+}
 
-	// heapify
-	heap.Init(&pq)
-	assert.Equal(t, 0.4, pq[0].node.(*testPQ).float64)
+func TestPriorityQueueHeapInterface(t *testing.T) {
+	const N = 1024
+	pq := make(priorityQueue, N)
+	expectedValues := make(sort.Float64Slice, N)
 
-	// mod the first element
-	pq[4] = queueNode{&testPQ{0.0}}
-
-	heap.Init(&pq)
-	assert.Equal(t, float64(0), pq[0].node.(*testPQ).float64)
-
-	// min value popping
-	expectedMinSequence := [7]float64{
-		0.0,
-		0.4,
-		1.0,
-		1.1,
-		1.2,
-		1.3,
-		1.4,
+	for i := 0; i < N; i++ {
+		v := rand.Float64()
+		pq[i] = queueNode{&testPQ{v}}
+		expectedValues[i] = v
 	}
 
-	for i, expected := range expectedMinSequence {
-		node := heap.Pop(&pq).(queueNode)
-		assert.Equal(t, expected, node.node.(*testPQ).float64)
-		assert.Equal(t, 7-i-1, pq.Len())
-		assert.Equal(t, 7-i-1, len(pq))
+	sort.Sort(expectedValues)
+
+	// test heap.Init
+	heap.Init(&pq)
+
+	// test pop in order after init
+	for i := 0; i < N; i++ {
+		v := heap.Pop(&pq).(queueNode)
+		assert.Equal(t, expectedValues[i], v.node.(*testPQ).float64)
+		assert.Equal(t, N-i-1, pq.Len())
+	}
+
+	// test push and pop in order
+	for i := 0; i < N; i++ {
+		heap.Push(&pq, queueNode{&testPQ{expectedValues[N-i-1]}})
+		assert.Equal(t, i+1, pq.Len())
+	}
+
+	for i := 0; i < N; i++ {
+		v := heap.Pop(&pq).(queueNode)
+		assert.Equal(t, expectedValues[i], v.node.(*testPQ).float64)
+		assert.Equal(t, N-i-1, pq.Len())
 	}
 }
