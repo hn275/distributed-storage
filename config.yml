@@ -10,5 +10,9 @@ cluster:
   node: 10
 
 load-balancer:
-  algo: simple-round-robin
+  # acceptable values:
+  #   - rr: simple round robin
+  #   - lrt: least response time
+  #   - lc: least connections
+  algo: lrt
   local-port: 8000

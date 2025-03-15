@@ -14,10 +14,6 @@ import (
 
 var (
 	logger *slog.Logger = slog.Default()
-
-	supportedAlgo = map[string]algo.LBAlgo{
-		"simple-round-robin": &algo.RoundRobin{},
-	}
 )
 
 func main() {
@@ -27,10 +23,9 @@ func main() {
 	}
 
 	// initializing the lb
-	var lbAlgo algo.LBAlgo
-	lbAlgo, ok := supportedAlgo[conf.Algorithm]
-	if !ok {
-		log.Fatalf("unsupported algorithm: %s", conf.Algorithm)
+	lbAlgo, err := algo.New(conf.Algorithm)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	lbAlgo.Initialize()

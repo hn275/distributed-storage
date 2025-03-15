@@ -1,6 +1,7 @@
 package algo
 
 import (
+	"fmt"
 	"net"
 )
 
@@ -8,6 +9,24 @@ type LBAlgo interface {
 	Initialize()
 	NodeJoin(net.Conn) error
 	GetNode() (net.Conn, error)
+}
+
+func New(algorithm string) (LBAlgo, error) {
+	switch algorithm {
+	case "rr":
+		return &RoundRobin{}, nil
+
+	case "lrt":
+		return &LeastResponseTime{}, nil
+
+	case "lc":
+		return &LeastConnection{}, nil
+
+	default:
+		return nil, fmt.Errorf(
+			"invalid algorithm, expected [rr|lrt|lc], got [%s]", algorithm,
+		)
+	}
 }
 
 type queueNodeCmp interface {
