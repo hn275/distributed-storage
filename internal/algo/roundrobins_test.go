@@ -10,7 +10,9 @@ import (
 )
 
 // testStruct implements net.Conn
-type testStruct struct{}
+type testStruct struct {
+	id float64
+}
 
 func TestRoundRobinInitialize(t *testing.T) {
 	rr := RoundRobin{}
