@@ -10,9 +10,11 @@ import (
 const (
 	DataNodeJoin = iota
 	UserNodeJoin
+	DataNodePort
 	ShutdownSig
 
-	ProtoTcp4 string = "tcp4"
+	ProtoTcp4   string = "tcp4"
+	AddrBufSize int    = 6
 )
 
 func AddrToBytes(addr net.Addr, buf []byte) error {
