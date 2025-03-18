@@ -57,11 +57,11 @@ func (pq priorityQueue) Len() int {
 
 // priorityQueue implements heap.Interface
 func (pq *priorityQueue) Push(x any) {
-	node, ok := x.(queueNode)
+	node, ok := x.(queueNodeCmp)
 	if !ok {
-		panic("invalid interface, expected `queueNode`")
+		panic("invalid interface, expected `queueNodeCmp`")
 	}
-	*pq = append(*pq, node)
+	*pq = append(*pq, queueNode{node})
 }
 
 // priorityQueue implements heap.Interface

@@ -39,10 +39,8 @@ func (lrt *LeastResponseTime) Initialize() {
 
 // LeastResponseTime implements LBAlgo
 func (lrt *LeastResponseTime) NodeJoin(conn net.Conn) error {
-	qNode := queueNode{
-		node: &LRTNode{conn, 0, 0.0},
-	}
-	heap.Push(lrt, qNode)
+	node := &LRTNode{conn, 0, 0.0}
+	heap.Push(lrt, node)
 	return nil
 }
 
@@ -52,7 +50,7 @@ func (lrt *LeastResponseTime) GetNode() (net.Conn, error) {
 		return nil, errors.New("no node to dispatch")
 	}
 
-	node := heap.Pop(lrt).(*LRTNode)
+	node := heap.Pop(lrt).(queueNode).node.(*LRTNode)
 	node.requests += 1
 
 	heap.Push(lrt, node)
