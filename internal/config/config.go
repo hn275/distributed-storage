@@ -18,7 +18,7 @@ type clusterYaml struct {
 }
 
 type loadbalancerYaml struct {
-	Algorithm string
+	Algorithm string `yaml:"algo"`
 	LocalPort uint16 `yaml:"local-port"`
 }
 
