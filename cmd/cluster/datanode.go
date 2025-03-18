@@ -50,8 +50,8 @@ func nodeInitialize(lbAddr string, nodeID uint16) (*dataNode, error) {
 func (dataNode *dataNode) Listen() {
 	defer dataNode.Close()
 
-	var buf [1]byte
 	for {
+		var buf [16]byte
 		// get a request from LB
 		_, err := dataNode.Read(buf[:])
 		if err != nil {
@@ -68,7 +68,7 @@ func (dataNode *dataNode) Listen() {
 
 		switch buf[0] {
 		case network.UserNodeJoin:
-			go requestSim(dataNode)
+			go requestSim(dataNode, buf[:])
 
 		default:
 			slog.Error("unsupported request.", "request", buf[0])
@@ -77,10 +77,10 @@ func (dataNode *dataNode) Listen() {
 	}
 }
 
-func requestSim(d *dataNode) {
+func requestSim(d *dataNode, msgBuf []byte) {
 	start := time.Now()
 
-	bytesWritten, err := d.handleUserNodeJoin()
+	bytesWritten, err := d.handleUserNodeJoin(msgBuf)
 	if err != nil {
 		slog.Error("failed to service user.", "err", err)
 		return
@@ -92,7 +92,7 @@ func requestSim(d *dataNode) {
 	slog.Info("finished service user.", "file-size", bytesWritten, "duration", dur)
 }
 
-func (dataNode *dataNode) handleUserNodeJoin() (int, error) {
+func (dataNode *dataNode) handleUserNodeJoin(msgBuf []byte) (int, error) {
 	// open a new port for user to dial
 	soc, err := net.Listen(network.ProtoTcp4, ":0")
 	if err != nil {
@@ -101,24 +101,31 @@ func (dataNode *dataNode) handleUserNodeJoin() (int, error) {
 
 	defer soc.Close()
 
-	// send port addr to LB
-	var addrBuf [6]byte // 4 bytes for ipv4, 2 bytes for port
-
+	// write port to msgBuf
 	addr, ok := soc.Addr().(*net.TCPAddr)
 	if !ok {
 		return 0, errors.New("invalid TCP address")
 	}
 
-	if err := network.AddrToBytes(addr, addrBuf[:]); err != nil {
+	if err := network.AddrToBytes(addr, msgBuf[7:13]); err != nil {
 		return 0, err
 	}
 
-	if _, err := dataNode.Write(addrBuf[:]); err != nil {
+	msgBuf[0] = network.DataNodePort
+	if _, err := dataNode.Write(msgBuf[:]); err != nil {
 		return 0, err
 	}
 
 	// handling user connection
-	slog.Info("waiting for user connection.", "listener-addr", soc.Addr())
+	userAddr, err := network.BytesToAddr(msgBuf[1:7])
+	if err != nil {
+		panic(err)
+	}
+	slog.Info(
+		"waiting for user connection.",
+		"user", userAddr,
+		"listener-addr", soc.Addr(),
+	)
 
 	user, err := soc.Accept()
 	if err != nil {
@@ -127,6 +134,7 @@ func (dataNode *dataNode) handleUserNodeJoin() (int, error) {
 
 	defer user.Close()
 
+	// TODO: verify user address
 	slog.Info("user connected.", "addr", user.RemoteAddr())
 
 	// get file digest + pub key from user
