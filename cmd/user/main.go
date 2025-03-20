@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/csv"
 	"encoding/hex"
 	"errors"
 	"flag"
@@ -8,6 +9,9 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"os"
+	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -19,13 +23,20 @@ import (
 	"github.com/hn275/distributed-storage/internal/network"
 	"lukechampine.com/blake3"
 )
+// can put the struct here. 
+type ClientTimeData struct {
+    duration time.Duration
+	size int64
+}
 
 var (
 	lbNodeAddr string
+	allClientTimeData []ClientTimeData
 
 	shutdownSignal = [...]byte{network.ShutdownSig}
 	userJoinSignal = [...]byte{network.UserNodeJoin}
 )
+
 
 func main() {
 
@@ -47,17 +58,34 @@ func main() {
 	}
 
 	wg := new(sync.WaitGroup)
+	
+	files := userConf.GetFiles(fileIndex)
+	numClients := 0
+	
+	for _, freq := range files {
+		numClients = numClients + freq;
+	}
+	// dynamically allocate client time array
+	allClientTimeData = make([]ClientTimeData, numClients)
+
+	clientIdx := 0
 
 	// requesting files
-	for fileName, freq := range userConf.GetFiles(fileIndex) {
+	for fileName, freq := range files {
 		slog.Info("requesting file.", "file-name", fileName, "freq", freq)
 		wg.Add(freq)
 		for i := 0; i < freq; i++ {
-			go runSim(fileName, wg)
+			// pass in global count variable
+			go runSim(fileName, wg, clientIdx)
+			// increment the global count variable
+			clientIdx++
 		}
 	}
 
 	wg.Wait()
+
+	// write client request time data to output file 
+	writeResultsToFile("clientResults.csv")
 
 	// send shutdown signal to load balancer
 
@@ -74,7 +102,43 @@ func main() {
 	}
 }
 
-func runSim(fileHash string, wg *sync.WaitGroup) {
+func writeResultsToFile(filename string){
+	dir := "client-telemetry-results"
+	
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		slog.Error("error creating directory:", err)
+	}
+
+	filePath := filepath.Join(dir, filename)
+	file, err := os.Create(filePath)
+	if err != nil {
+		slog.Error("error creating file:", err)
+		return
+	}
+	defer file.Close()
+
+	records := [][]string{
+		{"duration", "size"},
+	}
+
+	for _, data := range allClientTimeData {
+		row := []string{
+			strconv.FormatInt(data.duration.Milliseconds(), 10),
+			strconv.FormatInt(data.size, 10),
+		}
+		records = append(records, row)
+	}
+	
+	w := csv.NewWriter(file)
+	w.WriteAll(records)
+
+	if err := w.Error(); err != nil {
+		slog.Error("error writing csv:", err)
+		return
+	}
+}
+
+func runSim(fileHash string, wg *sync.WaitGroup, clientIdx int) {
 	start := time.Now()
 
 	fileSize, err := request(fileHash, wg)
@@ -87,8 +151,10 @@ func runSim(fileHash string, wg *sync.WaitGroup) {
 		return
 	}
 
-	// TODO: for Emily - add telemetry here
+	// Caputure request time for this client
 	dur := time.Since(start)
+	// Write time data to the global array for main thread to write to csv later
+	allClientTimeData[clientIdx] = ClientTimeData{duration: dur, size: fileSize}
 
 	slog.Info(
 		"file request complete.",
