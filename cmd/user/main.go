@@ -114,22 +114,21 @@ func request(fileHash string, wg *sync.WaitGroup) (int64, error) {
 		return 0, fmt.Errorf("failed ping load balancer: %v", err)
 	}
 
-	// slog.Info("connected to LB.", "remote_addr", lbConn.RemoteAddr())
-
 	// 64 bytes, 32 byte file hash, 32 byte pub key
 	var buf [64]byte
 
+	// getting data node address from LB
 	n, err := lbConn.Read(buf[:])
 	if err != nil {
 		return 0, fmt.Errorf("failed receive message from load balancer: %v", err)
 	}
 
-	if n != 6 {
-		return 0, errors.New("protocol violation, expecting 6 bytes only.")
+	if n != 13 {
+		return 0, fmt.Errorf("protocol violation, expecting at least 13 bytes, got %d bytes", n)
 	}
 
 	// dialing data node
-	dataNodeAddr, err := network.BytesToAddr(buf[:n])
+	dataNodeAddr, err := network.BytesToAddr(buf[7:13])
 	if err != nil {
 		return 0, fmt.Errorf("invalid network address: %v", buf[:n])
 	}

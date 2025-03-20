@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net"
 	"sync"
 
@@ -15,25 +16,16 @@ import (
 type userMap struct{ sync.Map }
 
 // stores the user connection in the map, writes the address to `keyBuf`
-func (u *userMap) store(keyBuf []byte, user net.Conn) error {
-	addr := user.RemoteAddr()
-	if err := network.AddrToBytes(user.RemoteAddr(), keyBuf); err != nil {
-		return err
-	}
-
+func (u *userMap) store(user net.Conn) {
+	addr := user.RemoteAddr().String()
 	u.Store(addr, user)
-	return nil
 }
 
-func (u *userMap) retrieve(userAddrBytes []byte) (net.Conn, bool) {
-	userAddr, err := network.BytesToAddr(userAddrBytes)
-	if err != nil {
-		panic(err)
-	}
-
-	v, ok := u.LoadAndDelete(userAddr)
+func (u *userMap) retrieve(userAddr net.Addr) (net.Conn, error) {
+	key := userAddr.String()
+	v, ok := u.LoadAndDelete(key)
 	if !ok {
-		return nil, ok
+		return nil, fmt.Errorf("user address not found: [%s]", userAddr.String())
 	}
 
 	conn, ok := v.(net.Conn)
@@ -41,7 +33,7 @@ func (u *userMap) retrieve(userAddrBytes []byte) (net.Conn, bool) {
 		panic("invalid interface, expected `net.Conn`")
 	}
 
-	return conn, ok
+	return conn, nil
 }
 
 type loadBalancer struct {
@@ -108,14 +100,36 @@ func (lbSrv *loadBalancer) listen() {
 	}
 }
 
+func (lb *loadBalancer) portForwardHandler(buf []byte) error {
+	// get user connection
+	userAddr, err := network.BytesToAddr(buf[1:7])
+	if err != nil {
+		return err
+	}
+
+	userConn, err := lb.users.retrieve(userAddr)
+	if err != nil {
+		return err
+	}
+
+	defer userConn.Close()
+
+	// forward the address
+	_, err = userConn.Write(buf[:13])
+
+	return err
+}
+
 func (lb *loadBalancer) userJoinHandler(user net.Conn) error {
 	// defer user.Close()
 	buf := [1 + network.AddrBufSize]byte{}
 	buf[0] = network.UserNodeJoin
 
-	if err := lb.users.store(buf[1:], user); err != nil {
+	if err := network.AddrToBytes(user.RemoteAddr(), buf[1:]); err != nil {
 		return err
 	}
+
+	lb.users.store(user)
 
 	// request for a data node
 	lb.clusterLock.Lock()
@@ -129,15 +143,6 @@ func (lb *loadBalancer) userJoinHandler(user net.Conn) error {
 	// port fowarding
 	_, err = node.Write(buf[:])
 	return err
-	/*
-		if err != nil {
-			return err
-		}
-
-		// _, err = io.CopyN(user, node, 6)
-
-		return err
-	*/
 }
 
 func (lb *loadBalancer) nodeJoinHandler(node net.Conn) error {
@@ -149,8 +154,8 @@ func (lb *loadBalancer) nodeJoinHandler(node net.Conn) error {
 }
 
 func (lb *loadBalancer) nodeServe(node net.Conn) {
-	var buf [16]byte
 	for {
+		var buf [16]byte
 		n, err := node.Read(buf[:])
 		if err != nil {
 			log.Println(err)
@@ -159,25 +164,48 @@ func (lb *loadBalancer) nodeServe(node net.Conn) {
 
 		msgType, msgBuf := buf[0], buf[1:n]
 		switch msgType {
+
+		case network.DataNodePort:
+			if err := lb.portForwardHandler(buf[:n]); err != nil {
+				log.Println(err)
+			}
+
 		case network.UserNodeJoin:
-			if len(msgBuf) != 12 { // 6 bytes for each address
+			if len(msgBuf) != 13 { // 6 bytes for each address
 				log.Println("TODO: invalid msgBuf len")
 				return
 			}
 
-			user, ok := lb.users.retrieve(buf[:6])
-			if !ok {
+			userAddr, err := network.BytesToAddr(buf[1:7])
+			if err != nil {
+				panic(err) // TODO: handle this error
+			}
+
+			user, err := lb.users.retrieve(userAddr)
+			if err != nil {
 				log.Printf("user not found: %v\n", buf[:6])
 			}
 
 			// changed message type to be DataNodeJoin, then forward to user
 			buf[0] = network.DataNodeJoin
-			if _, err := user.Write(buf[:]); err != nil {
+			n, err := user.Write(buf[:13])
+			if err != nil {
 				panic(err)
 			}
 
+			slog.Info(
+				"port forwarded.",
+				"node-id", node.RemoteAddr(),
+				"user", user.RemoteAddr(),
+				"bytes", n,
+			)
+
 		default:
-			log.Printf("unsupported msgType %v", msgType)
+			slog.Error(
+				"unsupported message",
+				"type", msgType,
+				"message", buf[:],
+			)
 		}
 	}
 }

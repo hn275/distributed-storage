@@ -51,7 +51,7 @@ func (dataNode *dataNode) Listen() {
 	defer dataNode.Close()
 
 	for {
-		var buf [16]byte
+		buf := make([]byte, 16)
 		// get a request from LB
 		_, err := dataNode.Read(buf[:])
 		if err != nil {
@@ -68,7 +68,7 @@ func (dataNode *dataNode) Listen() {
 
 		switch buf[0] {
 		case network.UserNodeJoin:
-			go requestSim(dataNode, buf[:])
+			go requestSim(dataNode, buf)
 
 		default:
 			slog.Error("unsupported request.", "request", buf[0])
@@ -92,7 +92,13 @@ func requestSim(d *dataNode, msgBuf []byte) {
 	slog.Info("finished service user.", "file-size", bytesWritten, "duration", dur)
 }
 
+// `msgBuf` is a 16 byte buffer
 func (dataNode *dataNode) handleUserNodeJoin(msgBuf []byte) (int, error) {
+	// this is hard coded, no need to return an error.
+	if len(msgBuf) != 16 {
+		panic("invalid msgBuf size")
+	}
+
 	// open a new port for user to dial
 	soc, err := net.Listen(network.ProtoTcp4, ":0")
 	if err != nil {
@@ -102,17 +108,12 @@ func (dataNode *dataNode) handleUserNodeJoin(msgBuf []byte) (int, error) {
 	defer soc.Close()
 
 	// write port to msgBuf
-	addr, ok := soc.Addr().(*net.TCPAddr)
-	if !ok {
-		return 0, errors.New("invalid TCP address")
-	}
-
-	if err := network.AddrToBytes(addr, msgBuf[7:13]); err != nil {
+	if err := network.AddrToBytes(soc.Addr(), msgBuf[7:13]); err != nil {
 		return 0, err
 	}
 
 	msgBuf[0] = network.DataNodePort
-	if _, err := dataNode.Write(msgBuf[:]); err != nil {
+	if _, err := dataNode.Write(msgBuf[:13]); err != nil {
 		return 0, err
 	}
 
