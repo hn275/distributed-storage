@@ -23,20 +23,20 @@ import (
 	"github.com/hn275/distributed-storage/internal/network"
 	"lukechampine.com/blake3"
 )
-// can put the struct here. 
+
+// can put the struct here.
 type ClientTimeData struct {
-    duration time.Duration
-	size int64
+	duration time.Duration
+	size     int64
 }
 
 var (
-	lbNodeAddr string
+	lbNodeAddr        string
 	allClientTimeData []ClientTimeData
 
 	shutdownSignal = [...]byte{network.ShutdownSig}
 	userJoinSignal = [...]byte{network.UserNodeJoin}
 )
-
 
 func main() {
 
@@ -58,12 +58,12 @@ func main() {
 	}
 
 	wg := new(sync.WaitGroup)
-	
+
 	files := userConf.GetFiles(fileIndex)
 	numClients := 0
-	
+
 	for _, freq := range files {
-		numClients = numClients + freq;
+		numClients = numClients + freq
 	}
 	// dynamically allocate client time array
 	allClientTimeData = make([]ClientTimeData, numClients)
@@ -84,7 +84,7 @@ func main() {
 
 	wg.Wait()
 
-	// write client request time data to output file 
+	// write client request time data to output file
 	writeResultsToFile("clientResults.csv")
 
 	// send shutdown signal to load balancer
@@ -102,9 +102,9 @@ func main() {
 	}
 }
 
-func writeResultsToFile(filename string){
+func writeResultsToFile(filename string) {
 	dir := "client-telemetry-results"
-	
+
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		slog.Error("error creating directory:", err)
 	}
@@ -128,7 +128,7 @@ func writeResultsToFile(filename string){
 		}
 		records = append(records, row)
 	}
-	
+
 	w := csv.NewWriter(file)
 	w.WriteAll(records)
 
