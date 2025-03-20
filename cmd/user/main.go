@@ -106,13 +106,15 @@ func writeResultsToFile(filename string) {
 	dir := "client-telemetry-results"
 
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		slog.Error("error creating directory:", err)
+		slog.Error("error creating directory",
+			"err", err)
 	}
 
 	filePath := filepath.Join(dir, filename)
 	file, err := os.Create(filePath)
 	if err != nil {
-		slog.Error("error creating file:", err)
+		slog.Error("error creating file",
+			"err", err)
 		return
 	}
 	defer file.Close()
@@ -133,7 +135,8 @@ func writeResultsToFile(filename string) {
 	w.WriteAll(records)
 
 	if err := w.Error(); err != nil {
-		slog.Error("error writing csv:", err)
+		slog.Error("error writing csv",
+			"err", err)
 		return
 	}
 }
