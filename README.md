@@ -12,6 +12,8 @@ TODO: redo docker compose and update the docs
 
 # Development
 
+For any implementation related, see [implementation.md](./docs/implementation.md)
+
 ## File Data
 
 Before running the simulation, the file data can be generated with the
