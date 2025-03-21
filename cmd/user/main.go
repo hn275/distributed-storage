@@ -108,6 +108,7 @@ func writeResultsToFile(filename string) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		slog.Error("error creating directory",
 			"err", err)
+		return
 	}
 
 	filePath := filepath.Join(dir, filename)
