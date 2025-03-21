@@ -26,15 +26,19 @@ func newLB(port int, algorithm algo.LBAlgo) (*loadBalancer, error) {
 		return nil, err
 	}
 
-	lbSrv := &loadBalancer{soc, algorithm, new(sync.Mutex)}
+	lbSrv := &loadBalancer{
+		Listener: soc,
+		engine:   algorithm,
+		lock:     new(sync.Mutex),
+	}
 	return lbSrv, nil
 }
 
 // server handlers
 // listener
 func (lbSrv *loadBalancer) listen() {
-	var buf [0xff]byte
 	for {
+		buf := [16]byte{}
 		conn, err := lbSrv.Accept()
 		if err != nil {
 			logger.Error("failed to accept new conn.",
@@ -75,31 +79,34 @@ func (lbSrv *loadBalancer) listen() {
 }
 
 func (lb *loadBalancer) userJoinHandler(user net.Conn) error {
-	defer user.Close()
-
 	// request for a data node
 	lb.lock.Lock()
-	node, err := lb.engine.GetNode()
+	_node, err := lb.engine.GetNode()
 	lb.lock.Unlock()
 
 	if err != nil {
 		return err
 	}
 
+	node := _node.(*dataNode)
+
 	// port fowarding
-	_, err = node.Write([]byte{network.UserNodeJoin})
-	if err != nil {
-		return err
+	buf := [16]byte{network.UserNodeJoin}
+	if err := network.AddrToBytes(user.RemoteAddr(), buf[1:7]); err != nil {
+		panic(err)
 	}
 
-	_, err = io.CopyN(user, node, 6)
+	node.write(buf[:])
+
+	cxMap.setClient(user)
 
 	return err
 }
 
 func (lb *loadBalancer) nodeJoinHandler(node net.Conn) error {
+	dataNode := makeDataNode(node)
 	lb.lock.Lock()
-	err := lb.engine.NodeJoin(node)
+	err := lb.engine.NodeJoin(dataNode)
 	lb.lock.Unlock()
 	return err
 }
