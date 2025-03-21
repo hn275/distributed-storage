@@ -4,25 +4,47 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"log"
 	"log/slog"
 	"net"
 	"os"
-	"time"
 
 	"github.com/hn275/distributed-storage/internal/crypto"
 	"github.com/hn275/distributed-storage/internal/database"
 	"github.com/hn275/distributed-storage/internal/network"
 )
 
-type dataNode struct {
-	net.Conn
-	id uint16
-}
-
 var nodeJoinSignal = [1]byte{network.DataNodeJoin}
 
+const randomLocalPort = "127.0.0.1:0"
+
+type dataNode struct {
+	net.Conn
+	id    uint16
+	wchan chan []byte
+}
+
+func makeDataNode(c net.Conn, id uint16) *dataNode {
+	dataNode := &dataNode{c, id, make(chan []byte, 100)}
+
+	go func(wchan <-chan []byte) {
+		for {
+			buf := <-wchan
+			if _, err := c.Write(buf); err != nil {
+				log.Println(err) // TODO: handle logging
+			}
+		}
+	}(dataNode.wchan)
+
+	return dataNode
+}
+
+func (d *dataNode) write(buf []byte) {
+	d.wchan <- buf
+}
+
 func nodeInitialize(lbAddr string, nodeID uint16) (*dataNode, error) {
-	laddr, err := net.ResolveTCPAddr(network.ProtoTcp4, ":0") // randomize the port
+	laddr, err := net.ResolveTCPAddr(network.ProtoTcp4, randomLocalPort)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +64,7 @@ func nodeInitialize(lbAddr string, nodeID uint16) (*dataNode, error) {
 		return nil, err
 	}
 
-	dataNode := &dataNode{lbSoc, nodeID}
+	dataNode := makeDataNode(lbSoc, nodeID)
 
 	return dataNode, nil
 }
@@ -50,8 +72,8 @@ func nodeInitialize(lbAddr string, nodeID uint16) (*dataNode, error) {
 func (dataNode *dataNode) Listen() {
 	defer dataNode.Close()
 
-	var buf [1]byte
 	for {
+		var buf [16]byte
 		// get a request from LB
 		_, err := dataNode.Read(buf[:])
 		if err != nil {
@@ -68,7 +90,12 @@ func (dataNode *dataNode) Listen() {
 
 		switch buf[0] {
 		case network.UserNodeJoin:
-			go requestSim(dataNode)
+			go func() {
+				if err := dataNode.handleUserJoin(buf[:]); err != nil {
+					log.Println(err) // TODO: log error
+				}
+			}()
+			// go requestSim(dataNode)
 
 		default:
 			slog.Error("unsupported request.", "request", buf[0])
@@ -77,52 +104,32 @@ func (dataNode *dataNode) Listen() {
 	}
 }
 
-func requestSim(d *dataNode) {
-	start := time.Now()
-
-	bytesWritten, err := d.handleUserNodeJoin()
-	if err != nil {
-		slog.Error("failed to service user.", "err", err)
-		return
+func (d *dataNode) handleUserJoin(buf []byte) error {
+	if len(buf) < 13 {
+		panic("handleUserJoin insufficient buf size")
 	}
+	// userAddr, _ := network.BytesToAddr(buf[1:7])
+	// log.Println("waiting for user", userAddr)
 
-	dur := time.Since(start)
-	// TODO: for Yasmin - add telemetry
-
-	slog.Info("finished service user.", "file-size", bytesWritten, "duration", dur)
-}
-
-func (dataNode *dataNode) handleUserNodeJoin() (int, error) {
 	// open a new port for user to dial
-	soc, err := net.Listen(network.ProtoTcp4, ":0")
+	soc, err := net.Listen(network.ProtoTcp4, randomLocalPort)
 	if err != nil {
-		return 0, err
+		return err
 	}
-
 	defer soc.Close()
 
-	// send port addr to LB
-	var addrBuf [6]byte // 4 bytes for ipv4, 2 bytes for port
-
-	addr, ok := soc.Addr().(*net.TCPAddr)
-	if !ok {
-		return 0, errors.New("invalid TCP address")
+	// PORT FORWARD TO LB
+	buf[0] = network.PortForwarding
+	if err := network.AddrToBytes(soc.Addr(), buf[7:13]); err != nil {
+		return err
 	}
 
-	if err := network.AddrToBytes(addr, addrBuf[:]); err != nil {
-		return 0, err
-	}
+	d.write(buf)
 
-	if _, err := dataNode.Write(addrBuf[:]); err != nil {
-		return 0, err
-	}
-
-	// handling user connection
-	slog.Info("waiting for user connection.", "listener-addr", soc.Addr())
-
+	// SERVING CLIENT
 	user, err := soc.Accept()
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	defer user.Close()
@@ -130,22 +137,22 @@ func (dataNode *dataNode) handleUserNodeJoin() (int, error) {
 	slog.Info("user connected.", "addr", user.RemoteAddr())
 
 	// get file digest + pub key from user
-	var buf [64]byte
-	if _, err := user.Read(buf[:]); err != nil {
-		return 0, err
+	var fileBuf [64]byte
+	if _, err := user.Read(fileBuf[:]); err != nil {
+		return err
 	}
 
-	fileName := hex.EncodeToString(buf[:32])
+	fileName := hex.EncodeToString(fileBuf[:32])
 	filePath := database.AccessCluster.Append(fileName).String()
 
 	// read + decrypt file
 	fileContent, err := os.ReadFile(filePath)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	var (
-		pubKey     []byte = buf[32:]
+		pubKey     []byte = fileBuf[32:]
 		secKey     []byte = crypto.DataNodeSecretKey[:]
 		dst        []byte = fileContent[crypto.NonceSize:crypto.NonceSize]
 		nonce      []byte = fileContent[:crypto.NonceSize]
@@ -158,16 +165,16 @@ func (dataNode *dataNode) handleUserNodeJoin() (int, error) {
 	)
 
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	// send it over the wire
 	plaintext := fileContent[crypto.NonceSize : len(fileContent)-crypto.OverHead]
 
-	n, err := user.Write(plaintext)
+	_, err = user.Write(plaintext)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	return n, nil
+	return nil
 }
