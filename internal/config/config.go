@@ -31,6 +31,12 @@ type userYaml struct {
 	XXlarge int `yaml:"xx-large"`
 }
 
+func NewConfig(configPath string) (*config, error) {
+	conf := &config{}
+	err := readConfig(conf, configPath)
+	return conf, err
+}
+
 func NewLBConfig(filePath string) (*loadbalancerYaml, error) {
 	conf := &config{}
 	if err := readConfig(conf, filePath); err != nil {

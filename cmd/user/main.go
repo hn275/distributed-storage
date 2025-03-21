@@ -46,7 +46,8 @@ func main() {
 	slog.Info("Load balancing address.", "lbaddr", lbNodeAddr)
 
 	// load config
-	userConf, err := config.NewUserConfig(internal.ConfigFilePath)
+	configPath := internal.EnvOrDefault("CONFIG_PATH", "config/config.yaml")
+	conf, err := config.NewConfig(configPath)
 	if err != nil {
 		panic(err)
 	}
@@ -59,7 +60,7 @@ func main() {
 
 	wg := new(sync.WaitGroup)
 
-	files := userConf.GetFiles(fileIndex)
+	files := conf.User.GetFiles(fileIndex)
 	numClients := 0
 
 	for _, freq := range files {
