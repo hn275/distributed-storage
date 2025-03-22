@@ -73,11 +73,18 @@ func (d *dataNode) listen() {
 		case network.PortForwarding:
 			go d.handlePortForward(buf[:])
 
+		case network.HealthCheck:
+			go d.handleHealthCheck(buf[:])
+
 		default:
 			d.log.Error("unsupported message type", "type", buf[0])
 		}
 	}
 
+}
+
+func (d *dataNode) handleHealthCheck(buf []byte) {
+	d.log.Error("unimplemented handleHealthCheck")
 }
 
 func (dn *dataNode) handlePortForward(buf []byte) {
