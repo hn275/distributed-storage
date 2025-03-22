@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"sync"
 
+	"github.com/dustin/go-humanize"
 	"github.com/hn275/distributed-storage/internal/network"
 )
 
@@ -24,26 +24,31 @@ func (cx *clientMap) getClient(userAddr net.Addr) (net.Conn, bool) {
 
 type dataNode struct {
 	net.Conn
-	rchan chan []byte
 	wchan chan []byte
+	id    uint16
+	log   *slog.Logger
 }
 
-func makeDataNode(conn net.Conn) *dataNode {
-	rchan := make(chan []byte, 100)
+func makeDataNode(conn net.Conn, nodeID uint16) *dataNode {
 	wchan := make(chan []byte, 100)
 
-	dataNode := &dataNode{conn, rchan, wchan}
+	logger := slog.Default().With("node-id", nodeID)
+
+	dataNode := &dataNode{conn, wchan, nodeID, logger}
 	go dataNode.listen()
 
 	// write routine
 	go func(wchan <-chan []byte) {
 		for {
 			buf := <-wchan
-			if _, err := conn.Write(buf); err != nil {
-				// TODO: handle logging
-				log.Println("makeDataNode error", err)
+			if n, err := conn.Write(buf); err != nil {
+				logger.Error("failed socket write.",
+					"err", err,
+					"len", humanize.Bytes(uint64(len(buf))))
+			} else {
+				logger.Info("packet sent.",
+					"len", humanize.Bytes(uint64(n)))
 			}
-
 		}
 	}(wchan)
 
@@ -54,49 +59,51 @@ func (dn *dataNode) write(buf []byte) {
 	dn.wchan <- buf
 }
 
-func (dn *dataNode) listen() {
+func (d *dataNode) listen() {
 	for {
 		buf := [16]byte{}
-		_, err := dn.Read(buf[:])
-		// TODO: handle logging
+		_, err := d.Read(buf[:])
 		if err != nil {
-			log.Println(err)
+			d.log.Error("failed to read socket",
+				"err", err)
 			continue
 		}
 
 		switch buf[0] {
 		case network.PortForwarding:
-			go func() {
-				if err := dn.handlePortForward(buf[:]); err != nil {
-					log.Println(err)
-				}
-			}()
+			go d.handlePortForward(buf[:])
 
 		default:
-			log.Println("unsupported message type", buf[0], buf[1:])
+			d.log.Error("unsupported message type", "type", buf[0])
 		}
 	}
 
 }
 
-func (dn *dataNode) handlePortForward(buf []byte) error {
+func (dn *dataNode) handlePortForward(buf []byte) {
 	if len(buf) < 13 {
 		panic("handlePortForward insufficient buf size")
 	}
 
 	clientAddr, err := network.BytesToAddr(buf[1:7])
 	if err != nil {
-		return err
+		dn.log.Error("failed to marshal address bytes.")
+		return
 	}
 
 	client, ok := cxMap.getClient(clientAddr)
 	if !ok {
-		return fmt.Errorf("client not found in map [%s]", clientAddr)
+		dn.log.Error("client not found in map.", "client", clientAddr)
+		return
 	}
 
 	defer client.Close()
 
-	_, err = client.Write(buf[7:13])
-	return err
-
+	if _, err := client.Write(buf[7:13]); err != nil {
+		dn.log.Error("failed to forward port to client.",
+			"client", client.RemoteAddr())
+	} else {
+		dn.log.Info("address forwarded to client.",
+			"client", client.RemoteAddr())
+	}
 }
