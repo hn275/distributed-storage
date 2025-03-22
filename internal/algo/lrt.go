@@ -15,7 +15,7 @@ type LRTNode struct {
 }
 
 // LRTNode implements queueNodeCmp
-func (left *LRTNode) less(other queueNodeCmp) bool {
+func (left *LRTNode) less(other QueueNode) bool {
 	right, ok := other.(*LRTNode)
 	if !ok {
 		panic("invalid type, expected '*LRTNode'")

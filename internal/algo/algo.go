@@ -10,12 +10,12 @@ type LBAlgo interface {
 	GetNode() (net.Conn, error)
 }
 
-type queueNodeCmp interface {
-	less(queueNodeCmp) bool
+type QueueNode interface {
+	less(QueueNode) bool
 }
 
 type queueNode struct {
-	node queueNodeCmp
+	node QueueNode
 }
 
 type priorityQueue []queueNode
