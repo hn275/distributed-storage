@@ -14,12 +14,17 @@ type testStruct struct {
 	id float64
 }
 
+// testStruct implements QueueNode
+// this is a nop
+func (t *testStruct) less(QueueNode) bool {
+	return false
+}
+
 func TestRoundRobinInitialize(t *testing.T) {
 	rr := RoundRobin{}
 
 	// tests for init
 	rr.Initialize()
-	assert.Equal(t, rr.size, 0)
 	assert.Equal(t, rr.index, 0)
 	assert.Equal(t, len(rr.queue), 0)
 }
@@ -28,9 +33,8 @@ func TestRoundRobinNodeJoin(t *testing.T) {
 	rr := RoundRobin{}
 
 	// tests for node join
-	err := rr.NodeJoin(&testStruct{})
-	assert.Nil(t, err)
-	assert.Equal(t, rr.size, 1)
+	rr.NodeJoin(&testStruct{})
+	assert.Equal(t, len(rr.queue), 1)
 	assert.Equal(t, rr.index, 0)
 }
 
@@ -40,21 +44,21 @@ func TestRoundRobinGetNode(t *testing.T) {
 	_, _ = rr.GetNode()
 
 	// node join
-	_ = rr.NodeJoin(&testStruct{})
-	_ = rr.NodeJoin(&testStruct{})
-	assert.Equal(t, rr.size, 2)
+	rr.NodeJoin(&testStruct{})
+	rr.NodeJoin(&testStruct{})
+	assert.Equal(t, len(rr.queue), 2)
 
 	// get node
 	node, err := rr.GetNode()
 	assert.Nil(t, err)
 	assert.NotNil(t, node)
-	assert.Equal(t, rr.size, 2)
+	assert.Equal(t, len(rr.queue), 2)
 	assert.Equal(t, rr.index, 1)
 
 	node, err = rr.GetNode()
 	assert.Nil(t, err)
 	assert.NotNil(t, node)
-	assert.Equal(t, rr.size, 2)
+	assert.Equal(t, len(rr.queue), 2)
 	assert.Equal(t, rr.index, 0)
 }
 

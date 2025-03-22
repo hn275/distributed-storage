@@ -2,34 +2,29 @@ package algo
 
 import (
 	"fmt"
-	"net"
 )
 
 // RoundRobin implements LBAlgo.
 type RoundRobin struct {
-	queue []net.Conn
+	queue []QueueNode
 	index int
-	size  int
 }
 
 func (rr *RoundRobin) Initialize() {
-	rr.size = 0
-	rr.queue = make([]net.Conn, rr.size)
+	rr.queue = make([]QueueNode, 0)
 	rr.index = 0
 }
 
-func (rr *RoundRobin) NodeJoin(node net.Conn) error {
+func (rr *RoundRobin) NodeJoin(node QueueNode) {
 	rr.queue = append(rr.queue, node)
-	rr.size++
-	return nil
 }
-func (rr *RoundRobin) GetNode() (net.Conn, error) {
+func (rr *RoundRobin) GetNode() (QueueNode, error) {
 	if len(rr.queue) == 0 {
 		return nil, fmt.Errorf("no node can be scheduled.")
 	}
 
 	node := rr.queue[rr.index]
-	rr.index = (rr.index + 1) % rr.size
+	rr.index = (rr.index + 1) % len(rr.queue)
 
 	return node, nil
 }

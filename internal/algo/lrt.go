@@ -38,11 +38,8 @@ func (lrt *LeastResponseTime) Initialize() {
 }
 
 // LeastResponseTime implements LBAlgo
-func (lrt *LeastResponseTime) NodeJoin(conn net.Conn) error {
-	qNode := queueNode{
-		node: &LRTNode{conn, 0, 0.0},
-	}
-	heap.Push(lrt, qNode)
+func (lrt *LeastResponseTime) NodeJoin(node QueueNode) error {
+	heap.Push(lrt, node)
 	return nil
 }
 
