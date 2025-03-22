@@ -35,6 +35,19 @@ func newLB(port int, algorithm algo.LBAlgo) (*loadBalancer, error) {
 }
 
 // server handlers
+
+type lbHandler func(net.Conn, []byte) error
+
+func handle(fn lbHandler, conn net.Conn, msg []byte) {
+	if err := fn(conn, msg); err != nil {
+		logger.Error(
+			"handler for peer returned an error.",
+			"remote_addr", conn.RemoteAddr(),
+			"err", err,
+		)
+	}
+}
+
 // listener
 func (lbSrv *loadBalancer) listen() {
 	for {
@@ -48,7 +61,8 @@ func (lbSrv *loadBalancer) listen() {
 			continue
 		}
 
-		if _, err = conn.Read(buf[:]); err != nil {
+		n, err := conn.Read(buf[:])
+		if err != nil {
 			// silent continue if peer disconnected
 			if !errors.Is(err, io.EOF) {
 				logger.Error("failed to read from socket.",
@@ -61,12 +75,11 @@ func (lbSrv *loadBalancer) listen() {
 
 		switch buf[0] {
 		case network.DataNodeJoin:
-			logger.Info("new data node.", "remote_addr", conn.RemoteAddr())
-			go handle(conn, lbSrv.nodeJoinHandler)
+			go handle(lbSrv.nodeJoinHandler, conn, buf[:n])
 
 		case network.UserNodeJoin:
 			logger.Info("new user.", "remote_addr", conn.RemoteAddr())
-			go handle(conn, lbSrv.userJoinHandler)
+			go handle(lbSrv.userJoinHandler, conn, nil)
 
 		case network.ShutdownSig:
 			return
@@ -78,7 +91,7 @@ func (lbSrv *loadBalancer) listen() {
 	}
 }
 
-func (lb *loadBalancer) userJoinHandler(user net.Conn) error {
+func (lb *loadBalancer) userJoinHandler(user net.Conn, _ []byte) error {
 	// request for a data node
 	lb.lock.Lock()
 	_node, err := lb.engine.GetNode()
@@ -103,10 +116,18 @@ func (lb *loadBalancer) userJoinHandler(user net.Conn) error {
 	return err
 }
 
-func (lb *loadBalancer) nodeJoinHandler(node net.Conn) error {
-	dataNode := makeDataNode(node)
+func (lb *loadBalancer) nodeJoinHandler(node net.Conn, msg []byte) error {
+	if len(msg) != 3 {
+		panic("protocol violation")
+	}
+
+	nodeId := network.BinaryEndianess.Uint16(msg[1:])
+
+	dataNode := makeDataNode(node, nodeId)
 	lb.lock.Lock()
 	err := lb.engine.NodeJoin(dataNode)
 	lb.lock.Unlock()
+
+	dataNode.log.Info("new data node.", "remote_addr", node.RemoteAddr())
 	return err
 }

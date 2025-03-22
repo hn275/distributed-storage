@@ -60,19 +60,6 @@ func main() {
 	slog.Info("end of simulation")
 }
 
-type lbHandler func(net.Conn) error
-
-// TODO: add telemetry
-func handle(conn net.Conn, fn lbHandler) {
-	if err := fn(conn); err != nil {
-		logger.Error(
-			"handler for peer returned an error.",
-			"remote_addr", conn.RemoteAddr(),
-			"err", err,
-		)
-	}
-}
-
 func closeConn(conn net.Conn) {
 	if err := conn.Close(); err != nil && !errors.Is(err, io.EOF) {
 		logger.Error("failed to close connection",
