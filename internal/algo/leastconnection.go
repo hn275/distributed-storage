@@ -14,7 +14,7 @@ type LCNode struct {
 }
 
 // LCNode implements queueNodeCmp
-func (left *LCNode) less(other QueueNode) bool {
+func (left *LCNode) Less(other QueueNode) bool {
 	right, ok := other.(*LCNode)
 	if !ok {
 		panic("invalid type, expected '*LCNode'")

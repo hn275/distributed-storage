@@ -3,15 +3,57 @@ package algo
 import (
 	"container/heap"
 	"math/rand"
+	"net"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
 type testPQ struct{ float64 }
 
-func (tpq *testPQ) less(other QueueNode) bool {
+// LocalAddr implements QueueNode.
+func (t *testPQ) LocalAddr() net.Addr {
+	panic("unimplemented")
+}
+
+// Read implements QueueNode.
+func (t *testPQ) Read(b []byte) (n int, err error) {
+	panic("unimplemented")
+}
+
+// RemoteAddr implements QueueNode.
+func (t *testPQ) RemoteAddr() net.Addr {
+	panic("unimplemented")
+}
+
+// SetDeadline implements QueueNode.
+func (*testPQ) SetDeadline(t time.Time) error {
+	panic("unimplemented")
+}
+
+// SetReadDeadline implements QueueNode.
+func (*testPQ) SetReadDeadline(t time.Time) error {
+	panic("unimplemented")
+}
+
+// SetWriteDeadline implements QueueNode.
+func (*testPQ) SetWriteDeadline(t time.Time) error {
+	panic("unimplemented")
+}
+
+// Write implements QueueNode.
+func (t *testPQ) Write(b []byte) (n int, err error) {
+	panic("unimplemented")
+}
+
+// testPQ implements net.Conn
+func (t *testPQ) Close() error {
+	return nil
+}
+
+func (tpq *testPQ) Less(other QueueNode) bool {
 	otherNode := other.(*testPQ)
 	return tpq.float64 < otherNode.float64
 }

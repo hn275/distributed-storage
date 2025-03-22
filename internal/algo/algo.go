@@ -1,5 +1,7 @@
 package algo
 
+import "net"
+
 type LBAlgo interface {
 	Initialize()
 	NodeJoin(QueueNode)
@@ -7,7 +9,8 @@ type LBAlgo interface {
 }
 
 type QueueNode interface {
-	less(QueueNode) bool
+	net.Conn
+	Less(QueueNode) bool
 }
 
 type priorityQueue []QueueNode
@@ -15,7 +18,7 @@ type priorityQueue []QueueNode
 // priorityQueue implements sort.Interface
 func (pq priorityQueue) Less(i, j int) bool {
 	left, right := pq[i], pq[j]
-	return left.less(right)
+	return left.Less(right)
 }
 
 // priorityQueue implements sort.Interface
