@@ -21,16 +21,20 @@ var (
 )
 
 func main() {
-	conf, err := config.NewLBConfig(internal.ConfigFilePath)
+	// reading in config file
+	configPath := internal.EnvOrDefault("CONFIG_PATH", config.DefaultConfigPath)
+	globConf, err := config.NewConfig(configPath)
 	if err != nil {
 		log.Fatalf("failed to read config. %v", err)
 	}
+
+	conf := &globConf.LoadBalancer
 
 	// initializing the lb
 	var lbAlgo algo.LBAlgo
 	lbAlgo, ok := supportedAlgo[conf.Algorithm]
 	if !ok {
-		log.Fatalf("unsupported algorithm: %s", conf.Algorithm)
+		log.Fatalf("unsupported algorithm: [%s]", conf.Algorithm)
 	}
 
 	lbAlgo.Initialize()

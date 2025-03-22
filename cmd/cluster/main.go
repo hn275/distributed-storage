@@ -17,10 +17,14 @@ func main() {
 	flag.StringVar(&lbNodeAddr, "addr", "127.0.0.1:8000", "Load Balancing address")
 	flag.Parse()
 
-	conf, err := config.NewClusterConfig(internal.ConfigFilePath)
+	// reading in config
+	configPath := internal.EnvOrDefault("CONFIG_PATH", config.DefaultConfigPath)
+	globConf, err := config.NewConfig(configPath)
 	if err != nil {
 		panic(err)
 	}
+
+	conf := &globConf.Cluster
 
 	// initialize cluster
 	slog.Info(
