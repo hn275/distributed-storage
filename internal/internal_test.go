@@ -15,7 +15,7 @@ func TestCalcMovingAvg(t *testing.T) {
 	}{
 		{0.0, 1.0, 1.0},
 		{1.0, 4.0, 2.5},
-		{2.5, 8.0, 15.0},
+		{2.5, 4, 3.0},
 	}
 
 	for i, v := range expected {
