@@ -16,3 +16,7 @@ func EnvOrDefault(key string, defaultValue string) string {
 	slog.Info("env set.", "key", key, "default", defaultValue)
 	return v
 }
+
+func CalcMovingAvg(n uint64, currentAvg, nextVal float64) float64 {
+	return (float64(n)*currentAvg + nextVal) / float64(n+1)
+}
