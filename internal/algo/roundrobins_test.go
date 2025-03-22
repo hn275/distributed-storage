@@ -16,7 +16,7 @@ type testStruct struct {
 
 // testStruct implements QueueNode
 // this is a nop
-func (t *testStruct) less(QueueNode) bool {
+func (t *testStruct) Less(QueueNode) bool {
 	return false
 }
 
