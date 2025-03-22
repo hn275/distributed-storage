@@ -46,7 +46,7 @@ func main() {
 	slog.Info("Load balancing address.", "lbaddr", lbNodeAddr)
 
 	// load config
-	configPath := internal.EnvOrDefault("CONFIG_PATH", "config/config.yaml")
+	configPath := internal.EnvOrDefault("CONFIG_PATH", config.DefaultConfigPath)
 	conf, err := config.NewConfig(configPath)
 	if err != nil {
 		panic(err)

@@ -7,6 +7,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const DefaultConfigPath = "config/default.yml"
+
 type config struct {
 	User         userYaml
 	Cluster      clusterYaml
@@ -18,7 +20,7 @@ type clusterYaml struct {
 }
 
 type loadbalancerYaml struct {
-	Algorithm string
+	Algorithm string `yaml:"algo"`
 	LocalPort uint16 `yaml:"local-port"`
 }
 
@@ -35,42 +37,6 @@ func NewConfig(configPath string) (*config, error) {
 	conf := &config{}
 	err := readConfig(conf, configPath)
 	return conf, err
-}
-
-func NewLBConfig(filePath string) (*loadbalancerYaml, error) {
-	conf := &config{}
-	if err := readConfig(conf, filePath); err != nil {
-		return nil, err
-	}
-
-	// default to simple-round-robin
-	if conf.LoadBalancer.Algorithm == "" {
-		conf.LoadBalancer.Algorithm = "simple-round-robin"
-	}
-
-	// default to port 8000, port 0 randomizes the binding port, and we don't
-	// want that.
-	if conf.LoadBalancer.LocalPort == 0 {
-		conf.LoadBalancer.LocalPort = 8000
-	}
-
-	return &conf.LoadBalancer, nil
-}
-
-func NewClusterConfig(filePath string) (*clusterYaml, error) {
-	conf := &config{}
-	if err := readConfig(conf, filePath); err != nil {
-		return nil, err
-	}
-	return &conf.Cluster, nil
-}
-
-func NewUserConfig(filePath string) (*userYaml, error) {
-	conf := &config{}
-	if err := readConfig(conf, filePath); err != nil {
-		return nil, err
-	}
-	return &conf.User, nil
 }
 
 func (u *userYaml) GetFiles(db *database.FileIndex) map[string]int {
