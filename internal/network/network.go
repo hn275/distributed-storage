@@ -11,9 +11,14 @@ const (
 	DataNodeJoin = iota
 	UserNodeJoin
 	PortForwarding
+	HealthCheck
 	ShutdownSig
 
 	ProtoTcp4 string = "tcp4"
+)
+
+var (
+	BinaryEndianess = binary.LittleEndian
 )
 
 func AddrToBytes(addr net.Addr, buf []byte) error {

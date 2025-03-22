@@ -1,38 +1,59 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"net"
 	"os"
+	"time"
 
+	"github.com/dustin/go-humanize"
+	"github.com/hn275/distributed-storage/internal"
 	"github.com/hn275/distributed-storage/internal/crypto"
 	"github.com/hn275/distributed-storage/internal/database"
 	"github.com/hn275/distributed-storage/internal/network"
 )
 
-var nodeJoinSignal = [1]byte{network.DataNodeJoin}
-
 const randomLocalPort = "127.0.0.1:0"
 
 type dataNode struct {
 	net.Conn
-	id    uint16
-	wchan chan []byte
+	id       uint16
+	wchan    chan []byte // write channel, for concurrent socket writing
+	avgRT    float64     // average response time, in nanoseconds
+	requests uint64      // num of requests served
+	log      *slog.Logger
 }
 
 func makeDataNode(c net.Conn, id uint16) *dataNode {
-	dataNode := &dataNode{c, id, make(chan []byte, 100)}
+	logger := slog.Default().With("node-id", id)
+	dataNode := &dataNode{
+		Conn:     c,
+		id:       id,
+		wchan:    make(chan []byte, 10),
+		avgRT:    0.0,
+		requests: 0,
+		log:      logger,
+	}
 
 	go func(wchan <-chan []byte) {
 		for {
 			buf := <-wchan
-			if _, err := c.Write(buf); err != nil {
-				log.Println(err) // TODO: handle logging
+			if n, err := c.Write(buf); err != nil {
+				dataNode.log.Error("failed send message to LB.",
+					"type", buf[0],
+					"len", humanize.Bytes(uint64(len(buf))),
+					"err", err)
+			} else {
+				dataNode.log.Info(
+					"message sent to LB.",
+					"type", buf[0],
+					"len", humanize.Bytes(uint64(n)))
 			}
 		}
 	}(dataNode.wchan)
@@ -61,7 +82,10 @@ func nodeInitialize(lbAddr string, nodeID uint16) (*dataNode, error) {
 		return nil, err
 	}
 
-	if _, err := lbSoc.Write(nodeJoinSignal[:]); err != nil {
+	ping := [3]byte{network.DataNodeJoin}
+	network.BinaryEndianess.PutUint16(ping[1:], nodeID)
+
+	if _, err := lbSoc.Write(ping[:]); err != nil {
 		return nil, err
 	}
 
@@ -70,21 +94,20 @@ func nodeInitialize(lbAddr string, nodeID uint16) (*dataNode, error) {
 	return dataNode, nil
 }
 
-func (dataNode *dataNode) Listen() {
-	defer dataNode.Close()
+func (d *dataNode) Listen() {
+	defer d.Close()
 
 	for {
 		var buf [16]byte
 		// get a request from LB
-		_, err := dataNode.Read(buf[:])
+		_, err := d.Read(buf[:])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				slog.Info(
+				d.log.Info(
 					"load balancer disconnected.",
-					"node-id", dataNode.id,
 				)
 			} else {
-				slog.Error("failed to read from LB.", "err", err)
+				d.log.Error("failed to read from LB.", "err", err)
 			}
 			return
 		}
@@ -92,14 +115,13 @@ func (dataNode *dataNode) Listen() {
 		switch buf[0] {
 		case network.UserNodeJoin:
 			go func() {
-				if err := dataNode.handleUserJoin(buf[:]); err != nil {
-					log.Println(err) // TODO: log error
+				if err := d.handleUserJoin(buf[:]); err != nil {
+					d.log.Error("failed to service UserNodeJoin", "err", err)
 				}
 			}()
-			// go requestSim(dataNode)
 
 		default:
-			slog.Error("unsupported request.", "request", buf[0])
+			d.log.Error("invalid requested service type.", "request", buf[0])
 
 		}
 	}
@@ -160,7 +182,10 @@ func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) error {
 			userAddr.String(), user.RemoteAddr().String())
 	}
 
-	slog.Info("user connected.", "addr", user.RemoteAddr())
+	d.log.Info("user connected.", "addr", user.RemoteAddr())
+
+	srvTimeStart := time.Now()
+	defer d.healthCheckReport(&srvTimeStart)
 
 	// get file digest + pub key from user
 	var fileBuf [64]byte
@@ -203,4 +228,22 @@ func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) error {
 	}
 
 	return nil
+}
+
+func (d *dataNode) healthCheckReport(srvStartTime *time.Time) {
+	// calculate the next average
+	dur := float64(time.Since(*srvStartTime).Nanoseconds())
+	d.avgRT = internal.CalcMovingAvg(d.requests, d.avgRT, dur)
+	d.requests += 1
+
+	// sends health check packet to LB
+	buf := make([]byte, 1, 16)
+	buf[0] = network.HealthCheck
+
+	bufWriter := bytes.NewBuffer(buf)
+	if err := binary.Write(bufWriter, network.BinaryEndianess, d.avgRT); err != nil {
+		panic(err) // TODO: handle this error
+	}
+
+	d.write(bufWriter.Bytes())
 }
