@@ -11,7 +11,7 @@ import (
 
 type testPQ struct{ float64 }
 
-func (tpq *testPQ) less(other queueNodeCmp) bool {
+func (tpq *testPQ) less(other QueueNode) bool {
 	otherNode := other.(*testPQ)
 	return tpq.float64 < otherNode.float64
 }
