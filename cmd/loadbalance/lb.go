@@ -92,22 +92,21 @@ func (lbSrv *loadBalancer) listen() {
 }
 
 func (lb *loadBalancer) userJoinHandler(user net.Conn, _ []byte) error {
-	// request for a data node
-	lb.lock.Lock()
-	_node, err := lb.engine.GetNode()
-	lb.lock.Unlock()
-
-	if err != nil {
-		return err
-	}
-
-	node := _node.(*dataNode)
-
 	// port fowarding
 	buf := [16]byte{network.UserNodeJoin}
 	if err := network.AddrToBytes(user.RemoteAddr(), buf[1:7]); err != nil {
 		panic(err)
 	}
+
+	// request for a data node
+	lb.lock.Lock()
+	defer lb.lock.Unlock()
+
+	_node, err := lb.engine.GetNode()
+	if err != nil {
+		return err
+	}
+	node := _node.(*dataNode)
 
 	node.write(buf[:])
 
