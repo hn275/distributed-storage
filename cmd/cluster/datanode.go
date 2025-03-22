@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -50,8 +49,7 @@ func makeDataNode(c net.Conn, id uint16) *dataNode {
 					"len", humanize.Bytes(uint64(len(buf))),
 					"err", err)
 			} else {
-				dataNode.log.Info(
-					"message sent to LB.",
+				dataNode.log.Info("message sent to LB.",
 					"type", buf[0],
 					"len", humanize.Bytes(uint64(n)))
 			}
@@ -103,11 +101,10 @@ func (d *dataNode) Listen() {
 		_, err := d.Read(buf[:])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				d.log.Info(
-					"load balancer disconnected.",
-				)
+				d.log.Info("load balancer disconnected.")
 			} else {
-				d.log.Error("failed to read from LB.", "err", err)
+				d.log.Error("failed to read from LB.",
+					"err", err)
 			}
 			return
 		}
@@ -116,12 +113,14 @@ func (d *dataNode) Listen() {
 		case network.UserNodeJoin:
 			go func() {
 				if err := d.handleUserJoin(buf[:]); err != nil {
-					d.log.Error("failed to service UserNodeJoin", "err", err)
+					d.log.Error("failed to service UserNodeJoin",
+						"err", err)
 				}
 			}()
 
 		default:
-			d.log.Error("invalid requested service type.", "request", buf[0])
+			d.log.Error("invalid requested service type.",
+				"request", buf[0])
 
 		}
 	}
@@ -152,21 +151,19 @@ func (d *dataNode) handleUserJoin(buf []byte) error {
 	d.write(buf)
 
 	// SERVING CLIENT
-	go func(soc net.Listener, userAddr net.Addr) {
-		if err := d.serveClient(soc, userAddr); err != nil {
-			panic(err)
-		}
-	}(soc, userAddr)
+	go d.serveClient(soc, userAddr)
 
 	return nil
 }
 
-func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) error {
+func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) {
 	defer soc.Close()
 
 	user, err := soc.Accept()
 	if err != nil {
-		return err
+		d.log.Error("failed to accept new connection",
+			"err", err)
+		return
 	}
 
 	defer user.Close()
@@ -177,20 +174,24 @@ func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) error {
 		IP.
 		Equal(userAddr.(*net.TCPAddr).IP)
 	if !sameUser {
-		return fmt.Errorf(
-			"invalid user ip address, expected [%v], got [%v]",
-			userAddr.String(), user.RemoteAddr().String())
+		d.log.Error("invalid user connection.",
+			"expected", userAddr,
+			"connected", user.RemoteAddr())
+		return
 	}
 
 	d.log.Info("user connected.", "addr", user.RemoteAddr())
 
-	srvTimeStart := time.Now()
-	defer d.healthCheckReport(&srvTimeStart)
+	srvTimeStart := new(time.Time)
+	*srvTimeStart = time.Now()
+	defer d.healthCheckReport(srvTimeStart)
 
 	// get file digest + pub key from user
 	var fileBuf [64]byte
 	if _, err := user.Read(fileBuf[:]); err != nil {
-		return err
+		d.log.Error("failed to read socket.",
+			"err", err)
+		return
 	}
 
 	fileName := hex.EncodeToString(fileBuf[:32])
@@ -199,7 +200,9 @@ func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) error {
 	// read + decrypt file
 	fileContent, err := os.ReadFile(filePath)
 	if err != nil {
-		return err
+		d.log.Error("failed to read file.",
+			"file-path", filePath)
+		return
 	}
 
 	var (
@@ -216,7 +219,10 @@ func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) error {
 	)
 
 	if err != nil {
-		return err
+		d.log.Error("failed to decrypt content.",
+			"err", err,
+			"file", filePath)
+		return
 	}
 
 	// send it over the wire
@@ -224,10 +230,9 @@ func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) error {
 
 	_, err = user.Write(plaintext)
 	if err != nil {
-		return err
+		d.log.Error("failed to write to socket.",
+			"err", err)
 	}
-
-	return nil
 }
 
 func (d *dataNode) healthCheckReport(srvStartTime *time.Time) {
