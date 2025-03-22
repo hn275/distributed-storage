@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -108,15 +109,17 @@ func (d *dataNode) handleUserJoin(buf []byte) error {
 	if len(buf) < 13 {
 		panic("handleUserJoin insufficient buf size")
 	}
-	// userAddr, _ := network.BytesToAddr(buf[1:7])
-	// log.Println("waiting for user", userAddr)
+
+	userAddr, err := network.BytesToAddr(buf[1:7])
+	if err != nil {
+		return err
+	}
 
 	// open a new port for user to dial
 	soc, err := net.Listen(network.ProtoTcp4, randomLocalPort)
 	if err != nil {
 		return err
 	}
-	defer soc.Close()
 
 	// PORT FORWARD TO LB
 	buf[0] = network.PortForwarding
@@ -127,12 +130,35 @@ func (d *dataNode) handleUserJoin(buf []byte) error {
 	d.write(buf)
 
 	// SERVING CLIENT
+	go func(soc net.Listener, userAddr net.Addr) {
+		if err := d.serveClient(soc, userAddr); err != nil {
+			panic(err)
+		}
+	}(soc, userAddr)
+
+	return nil
+}
+
+func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) error {
+	defer soc.Close()
+
 	user, err := soc.Accept()
 	if err != nil {
 		return err
 	}
 
 	defer user.Close()
+
+	// check for the connection, need to match with `userAddr`
+	sameUser := user.
+		RemoteAddr().(*net.TCPAddr).
+		IP.
+		Equal(userAddr.(*net.TCPAddr).IP)
+	if !sameUser {
+		return fmt.Errorf(
+			"invalid user ip address, expected [%v], got [%v]",
+			userAddr.String(), user.RemoteAddr().String())
+	}
 
 	slog.Info("user connected.", "addr", user.RemoteAddr())
 
