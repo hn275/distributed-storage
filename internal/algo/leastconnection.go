@@ -33,18 +33,14 @@ func (lrt *LeastConnection) Initialize() {
 }
 
 // LeastConnection implements LBAlgo
-func (lrt *LeastConnection) NodeJoin(conn net.Conn) error {
-	qNode := queueNode{
-		node: &LCNode{conn, 0},
-	}
-	heap.Push(lrt, qNode)
-	return nil
+func (lrt *LeastConnection) NodeJoin(node QueueNode) {
+	heap.Push(lrt, node)
 }
 
 // LeastConnection implements LBAlgo
-func (lrt *LeastConnection) GetNode() (net.Conn, error) {
+func (lrt *LeastConnection) GetNode() (QueueNode, error) {
 	if lrt.Len() == 0 {
-		return nil, errors.New("no node to dispatch")
+		return nil, errors.New("queue empty")
 	}
 
 	node := heap.Pop(lrt).(*LCNode)

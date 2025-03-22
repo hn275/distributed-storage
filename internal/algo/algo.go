@@ -1,29 +1,21 @@
 package algo
 
-import (
-	"net"
-)
-
 type LBAlgo interface {
 	Initialize()
-	NodeJoin(net.Conn) error
-	GetNode() (net.Conn, error)
+	NodeJoin(QueueNode)
+	GetNode() (QueueNode, error)
 }
 
 type QueueNode interface {
 	less(QueueNode) bool
 }
 
-type queueNode struct {
-	node QueueNode
-}
-
-type priorityQueue []queueNode
+type priorityQueue []QueueNode
 
 // priorityQueue implements sort.Interface
 func (pq priorityQueue) Less(i, j int) bool {
 	left, right := pq[i], pq[j]
-	return left.node.less(right.node)
+	return left.less(right)
 }
 
 // priorityQueue implements sort.Interface
@@ -38,7 +30,7 @@ func (pq priorityQueue) Len() int {
 
 // priorityQueue implements heap.Interface
 func (pq *priorityQueue) Push(x any) {
-	node, ok := x.(queueNode)
+	node, ok := x.(QueueNode)
 	if !ok {
 		panic("invalid interface, expected `queueNode`")
 	}
@@ -46,6 +38,7 @@ func (pq *priorityQueue) Push(x any) {
 }
 
 // priorityQueue implements heap.Interface
+// should returns a QueueNode
 func (pq *priorityQueue) Pop() any {
 	n := len(*pq) - 1
 	node := (*pq)[n]

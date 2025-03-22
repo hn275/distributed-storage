@@ -19,13 +19,13 @@ func (tpq *testPQ) less(other QueueNode) bool {
 func TestPriorityQueueSortInterface(t *testing.T) {
 	pq := make(priorityQueue, 7)
 
-	pq[0] = queueNode{&testPQ{1.0}}
-	pq[1] = queueNode{&testPQ{1.1}}
-	pq[2] = queueNode{&testPQ{1.2}}
-	pq[3] = queueNode{&testPQ{1.3}}
-	pq[4] = queueNode{&testPQ{1.4}}
-	pq[5] = queueNode{&testPQ{1.4}}
-	pq[6] = queueNode{&testPQ{0.4}}
+	pq[0] = &testPQ{1.0}
+	pq[1] = &testPQ{1.1}
+	pq[2] = &testPQ{1.2}
+	pq[3] = &testPQ{1.3}
+	pq[4] = &testPQ{1.4}
+	pq[5] = &testPQ{1.4}
+	pq[6] = &testPQ{0.4}
 
 	// Len()
 	assert.Equal(t, len(pq), pq.Len())
@@ -44,8 +44,8 @@ func TestPriorityQueueSortInterface(t *testing.T) {
 
 	// Swap(i, j int)
 	pq.Swap(0, 3)
-	assert.Equal(t, 1.3, pq[0].node.(*testPQ).float64)
-	assert.Equal(t, 1.0, pq[3].node.(*testPQ).float64)
+	assert.Equal(t, 1.3, pq[0].(*testPQ).float64)
+	assert.Equal(t, 1.0, pq[3].(*testPQ).float64)
 }
 
 func TestPriorityQueueHeapInterface(t *testing.T) {
@@ -55,7 +55,7 @@ func TestPriorityQueueHeapInterface(t *testing.T) {
 
 	for i := 0; i < N; i++ {
 		v := rand.Float64()
-		pq[i] = queueNode{&testPQ{v}}
+		pq[i] = &testPQ{v}
 		expectedValues[i] = v
 	}
 
@@ -66,20 +66,20 @@ func TestPriorityQueueHeapInterface(t *testing.T) {
 
 	// test pop in order after init
 	for i := 0; i < N; i++ {
-		v := heap.Pop(&pq).(queueNode)
-		assert.Equal(t, expectedValues[i], v.node.(*testPQ).float64)
+		v := heap.Pop(&pq).(QueueNode)
+		assert.Equal(t, expectedValues[i], v.(*testPQ).float64)
 		assert.Equal(t, N-i-1, pq.Len())
 	}
 
 	// test push and pop in order
 	for i := 0; i < N; i++ {
-		heap.Push(&pq, queueNode{&testPQ{expectedValues[N-i-1]}})
+		heap.Push(&pq, &testPQ{expectedValues[N-i-1]})
 		assert.Equal(t, i+1, pq.Len())
 	}
 
 	for i := 0; i < N; i++ {
-		v := heap.Pop(&pq).(queueNode)
-		assert.Equal(t, expectedValues[i], v.node.(*testPQ).float64)
+		v := heap.Pop(&pq).(QueueNode)
+		assert.Equal(t, expectedValues[i], v.(*testPQ).float64)
 		assert.Equal(t, N-i-1, pq.Len())
 	}
 }
