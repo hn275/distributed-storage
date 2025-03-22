@@ -9,7 +9,7 @@ import (
 
 const DefaultConfigPath = "config/default.yml"
 
-type config struct {
+type Config struct {
 	User         userYaml
 	Cluster      clusterYaml
 	LoadBalancer loadbalancerYaml `yaml:"load-balancer"`
@@ -33,8 +33,8 @@ type userYaml struct {
 	XXlarge int `yaml:"xx-large"`
 }
 
-func NewConfig(configPath string) (*config, error) {
-	conf := &config{}
+func NewConfig(configPath string) (*Config, error) {
+	conf := &Config{}
 	err := readConfig(conf, configPath)
 	return conf, err
 }
@@ -52,7 +52,7 @@ func (u *userYaml) GetFiles(db *database.FileIndex) map[string]int {
 	return files
 }
 
-func readConfig(confBuf *config, filePath string) error {
+func readConfig(confBuf *Config, filePath string) error {
 	fd, err := os.OpenFile(filePath, os.O_RDONLY, 0666)
 	if err != nil {
 		return err
