@@ -1,8 +1,8 @@
 user:
-  x-small: 1
-  small: 1
-  medium: 1
-  large: 1
+  x-small: 100
+  small: 20
+  medium: 10
+  large: 10
   x-large: 1
   xx-large: 1
 
@@ -11,5 +11,5 @@ cluster:
 
 load-balancer:
   # allowed values: simple-round-robin, least-connections, least-response-time
-  algo: least-response-time
+  algo: simple-round-robin
   local-port: 8000

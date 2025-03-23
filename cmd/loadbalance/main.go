@@ -10,6 +10,7 @@ import (
 	"github.com/hn275/distributed-storage/internal"
 	"github.com/hn275/distributed-storage/internal/algo"
 	"github.com/hn275/distributed-storage/internal/config"
+	"github.com/hn275/distributed-storage/internal/telemetry"
 )
 
 var (
@@ -44,7 +45,15 @@ func main() {
 	lbAlgo.Initialize()
 	log.Printf("load balancing algorithm: %s\n", conf.Algorithm)
 
-	lbSrv, err := newLB(int(conf.LocalPort), lbAlgo)
+	// telemetry
+	tel, err := telemetry.New("lb-example.csv", csvheaders)
+	if err != nil {
+		panic(err)
+	}
+
+	defer tel.Done()
+
+	lbSrv, err := newLB(int(conf.LocalPort), lbAlgo, tel)
 	if err != nil {
 		log.Fatalf("failed to open listening socket: %W", err)
 	}

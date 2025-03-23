@@ -6,18 +6,52 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/hn275/distributed-storage/internal/algo"
 	"github.com/hn275/distributed-storage/internal/network"
+	"github.com/hn275/distributed-storage/internal/telemetry"
 )
+
+const (
+	eventUserJoin    = "user-joined"
+	eventNodeJoin    = "node-joined"
+	eventPortForward = "port-forward"
+
+	peerUser     = "user"
+	peerDataNode = "node"
+)
+
+var csvheaders = []string{
+	"event-type", "peer", "node-id", "timestamp", "duration(ns)",
+}
+
+type event struct {
+	eType     string
+	peer      string
+	peerID    int32
+	timestamp time.Time
+	duration  int64
+}
+
+func (e *event) Row() []string {
+	return []string{
+		e.eType,
+		e.peer,
+		fmt.Sprintf("%d", e.peerID),
+		e.timestamp.Format("15:04:05.000"),
+		fmt.Sprintf("%d", e.duration),
+	}
+}
 
 type loadBalancer struct {
 	net.Listener
 	engine algo.LBAlgo
 	lock   *sync.Mutex
+	tel    *telemetry.Telemetry
 }
 
-func newLB(port int, algorithm algo.LBAlgo) (*loadBalancer, error) {
+func newLB(port int, algorithm algo.LBAlgo, tel *telemetry.Telemetry) (*loadBalancer, error) {
 	// open listening socket
 	portStr := fmt.Sprintf(":%d", port)
 	soc, err := net.Listen(network.ProtoTcp4, portStr)
@@ -30,6 +64,7 @@ func newLB(port int, algorithm algo.LBAlgo) (*loadBalancer, error) {
 		Listener: soc,
 		engine:   algorithm,
 		lock:     new(sync.Mutex),
+		tel:      tel,
 	}
 	return lbSrv, nil
 }
@@ -92,6 +127,7 @@ func (lbSrv *loadBalancer) listen() {
 }
 
 func (lb *loadBalancer) userJoinHandler(user net.Conn, _ []byte) error {
+	ts := time.Now()
 	// port fowarding
 	buf := [16]byte{network.UserNodeJoin}
 	if err := network.AddrToBytes(user.RemoteAddr(), buf[1:7]); err != nil {
@@ -116,10 +152,18 @@ func (lb *loadBalancer) userJoinHandler(user net.Conn, _ []byte) error {
 
 	cxMap.setClient(user)
 
+	lb.tel.Collect(&event{
+		eType:     eventUserJoin,
+		peer:      peerUser,
+		peerID:    int32(nodeQ.id),
+		timestamp: ts,
+		duration:  time.Since(ts).Nanoseconds(),
+	})
 	return err
 }
 
 func (lb *loadBalancer) nodeJoinHandler(node net.Conn, msg []byte) error {
+	ts := time.Now()
 	if len(msg) != 3 {
 		panic("protocol violation")
 	}
@@ -132,5 +176,12 @@ func (lb *loadBalancer) nodeJoinHandler(node net.Conn, msg []byte) error {
 	lb.lock.Unlock()
 
 	dataNode.log.Info("new data node.", "remote_addr", node.RemoteAddr())
+	lb.tel.Collect(&event{
+		eType:     eventNodeJoin,
+		peer:      peerDataNode,
+		peerID:    int32(nodeId),
+		timestamp: ts,
+		duration:  time.Since(ts).Nanoseconds(),
+	})
 	return nil
 }

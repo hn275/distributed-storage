@@ -188,8 +188,11 @@ func request(fileHash string, wg *sync.WaitGroup) (int64, error) {
 	// slog.Info("connected to LB.", "remote_addr", lbConn.RemoteAddr())
 
 	// 64 bytes, 32 byte file hash, 32 byte pub key
-	var buf [64]byte
+	if err := lbConn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		panic(err)
+	}
 
+	var buf [64]byte
 	n, err := lbConn.Read(buf[:])
 	if err != nil {
 		return 0, fmt.Errorf("failed receive message from load balancer: %v", err)
