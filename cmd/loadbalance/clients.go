@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"log/slog"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/hn275/distributed-storage/internal/algo"
@@ -122,8 +125,35 @@ func (d *dataNode) listen() {
 }
 
 func (d *dataNode) handleHealthCheck(buf []byte) {
+	lbSrv.lock.Lock()
+
+	ts := time.Now()
+	defer func() {
+		lbSrv.lock.Unlock()
+		lbSrv.tel.Collect(&event{
+			eType:     eventHealthCheck,
+			peer:      peerDataNode,
+			peerID:    int32(d.id),
+			timestamp: ts,
+			duration:  time.Since(ts).Nanoseconds(),
+		})
+	}()
+
+	// data node sends a health check message when it's done serving the client.
+	// so the active requests is reduced by 1.
 	d.requests -= 1
-	d.log.Error("unimplemented handleHealthCheck")
+
+	bufReader := bytes.NewReader(buf[1:])
+	err := binary.Read(bufReader, network.BinaryEndianess, &d.avgRT)
+	if err != nil {
+		d.log.Error("HealthCheck failed.", "err", err)
+		return
+	}
+
+	if err := lbSrv.engine.Fix(d.index); err != nil {
+		d.log.Error("failed priority queue fixes.", "err", err)
+		return
+	}
 }
 
 func (dn *dataNode) handlePortForward(buf []byte) {

@@ -16,6 +16,7 @@ import (
 var (
 	logger   *slog.Logger = slog.Default()
 	globConf *config.Config
+	lbSrv    *loadBalancer
 
 	supportedAlgo = map[string]algo.LBAlgo{
 		algo.AlgoSimpleRoundRobin:  &algo.RoundRobin{},
@@ -54,7 +55,7 @@ func main() {
 
 	defer tel.Done()
 
-	lbSrv, err := newLB(int(conf.LocalPort), lbAlgo, tel)
+	lbSrv, err = newLB(int(conf.LocalPort), lbAlgo, tel)
 	if err != nil {
 		log.Fatalf("failed to open listening socket: %W", err)
 	}
