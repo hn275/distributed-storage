@@ -35,6 +35,12 @@ type dataNode struct {
 	log      *slog.Logger
 	avgRT    float64
 	requests uint64
+	index    int
+}
+
+// SetIndex implements algo.QueueNode.
+func (d *dataNode) SetIndex(i int) {
+	d.index = i
 }
 
 func (d *dataNode) Less(other algo.QueueNode) bool {
@@ -58,7 +64,15 @@ func makeDataNode(conn net.Conn, nodeID uint16) *dataNode {
 
 	logger := slog.Default().With("node-id", nodeID)
 
-	dataNode := &dataNode{conn, wchan, nodeID, logger, 0, 0}
+	dataNode := &dataNode{
+		Conn:     conn,
+		wchan:    wchan,
+		id:       nodeID,
+		log:      logger,
+		avgRT:    0.0,
+		requests: 0,
+		index:    0,
+	}
 	go dataNode.listen()
 
 	// write routine

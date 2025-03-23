@@ -32,3 +32,13 @@ func (lc *LeastConnection) GetNode() (QueueNode, error) {
 func (lc *LeastConnection) PutNode(node QueueNode) {
 	lc.NodeJoin(node)
 }
+
+// LeastConnection implements LBAlgo
+func (lc *LeastConnection) Fix(i int) error {
+	if i >= lc.priorityQueue.Len() {
+		return errors.New("index i out of bound.")
+	}
+
+	heap.Fix(&lc.priorityQueue, i)
+	return nil
+}

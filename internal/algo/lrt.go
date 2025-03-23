@@ -32,3 +32,13 @@ func (lrt *LeastResponseTime) GetNode() (QueueNode, error) {
 func (lrt *LeastResponseTime) PutNode(node QueueNode) {
 	lrt.NodeJoin(node)
 }
+
+// LeastResponseTime implements LBAlgo
+func (lrt *LeastResponseTime) Fix(i int) error {
+	if i >= lrt.priorityQueue.Len() {
+		return errors.New("index i out of bound.")
+	}
+
+	heap.Fix(&lrt.priorityQueue, i)
+	return nil
+}
