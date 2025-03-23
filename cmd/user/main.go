@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
@@ -77,7 +78,7 @@ func main() {
 		wg.Add(freq)
 		for i := 0; i < freq; i++ {
 			// pass in global count variable
-			go runSim(fileName, wg, clientIdx)
+			go runSim(fileName, wg, clientIdx, conf.User.Interval)
 			// increment the global count variable
 			clientIdx++
 		}
@@ -144,7 +145,11 @@ func writeResultsToFile(filename string) {
 	}
 }
 
-func runSim(fileHash string, wg *sync.WaitGroup, clientIdx int) {
+func runSim(fileHash string, wg *sync.WaitGroup, clientIdx int, interval uint32) {
+	// sleep for a random number of seconds in [0, interval]
+	sleepDuration := time.Duration(rand.Float32()*float32(interval)) * time.Second
+	time.Sleep(sleepDuration)
+
 	start := time.Now()
 
 	fileSize, err := request(fileHash, wg)
