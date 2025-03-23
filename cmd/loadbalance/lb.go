@@ -17,6 +17,7 @@ const (
 	eventUserJoin    = "user-joined"
 	eventNodeJoin    = "node-joined"
 	eventPortForward = "port-forward"
+	eventHealthCheck = "health-check"
 
 	peerUser     = "user"
 	peerDataNode = "node"
@@ -146,11 +147,10 @@ func (lb *loadBalancer) userJoinHandler(user net.Conn, _ []byte) error {
 	nodeQ := node.(*dataNode)
 	nodeQ.requests += 1
 
-	if _, err := node.(net.Conn).Write(buf[:]); err != nil {
-		return err
-	}
-
+	nodeQ.write(buf[:])
 	cxMap.setClient(user)
+
+	lb.engine.PutNode(nodeQ)
 
 	lb.tel.Collect(&event{
 		eType:     eventUserJoin,
