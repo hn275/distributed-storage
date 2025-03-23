@@ -21,6 +21,9 @@ func (cx *clientMap) setClient(userConn net.Conn) {
 
 func (cx *clientMap) getClient(userAddr net.Addr) (net.Conn, bool) {
 	v, ok := cx.LoadAndDelete(userAddr.String())
+	if !ok {
+		return nil, ok
+	}
 	return v.(net.Conn), ok
 }
 
@@ -36,13 +39,13 @@ type dataNode struct {
 
 func (d *dataNode) Less(other algo.QueueNode) bool {
 	switch globConf.LoadBalancer.Algorithm {
-	case "simple-round-robin":
+	case algo.AlgoSimpleRoundRobin:
 		return false // nop
 
-	case "least-response-time":
+	case algo.AlgoLeastResponseTime:
 		return d.avgRT < other.(*dataNode).avgRT
 
-	case "least-connection":
+	case algo.AlgoLeastConnections:
 		return d.requests < other.(*dataNode).requests
 
 	default:
@@ -105,6 +108,7 @@ func (d *dataNode) listen() {
 }
 
 func (d *dataNode) handleHealthCheck(buf []byte) {
+	d.requests -= 1
 	d.log.Error("unimplemented handleHealthCheck")
 }
 

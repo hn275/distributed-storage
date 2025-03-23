@@ -5,6 +5,7 @@ import "net"
 const (
 	AlgoSimpleRoundRobin  = "simple-round-robin"
 	AlgoLeastResponseTime = "least-response-time"
+	AlgoLeastConnections  = "least-connections"
 )
 
 type LBAlgo interface {

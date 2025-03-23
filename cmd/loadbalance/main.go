@@ -17,7 +17,9 @@ var (
 	globConf *config.Config
 
 	supportedAlgo = map[string]algo.LBAlgo{
-		algo.AlgoSimpleRoundRobin: &algo.RoundRobin{},
+		algo.AlgoSimpleRoundRobin:  &algo.RoundRobin{},
+		algo.AlgoLeastResponseTime: &algo.LeastResponseTime{},
+		algo.AlgoLeastConnections:  &algo.LeastConnection{},
 	}
 )
 
