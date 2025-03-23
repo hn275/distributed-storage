@@ -107,7 +107,8 @@ func (lb *loadBalancer) userJoinHandler(user net.Conn, _ []byte) error {
 		return err
 	}
 
-	node.(*dataNode).write(buf[:])
+	nodeQ := node.(*dataNode)
+	nodeQ.requests += 1
 
 	if _, err := node.(net.Conn).Write(buf[:]); err != nil {
 		return err
