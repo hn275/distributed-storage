@@ -13,11 +13,13 @@ type LBAlgo interface {
 	NodeJoin(QueueNode)
 	GetNode() (QueueNode, error)
 	PutNode(QueueNode)
+	Fix(int) error
 }
 
 type QueueNode interface {
 	net.Conn
 	Less(QueueNode) bool
+	SetIndex(i int)
 }
 
 type priorityQueue []QueueNode
@@ -30,6 +32,11 @@ func (pq priorityQueue) Less(i, j int) bool {
 
 // priorityQueue implements sort.Interface
 func (pq priorityQueue) Swap(i, j int) {
+	// swap the indexes
+	pq[i].SetIndex(j)
+	pq[j].SetIndex(i)
+
+	// swap
 	pq[i], pq[j] = pq[j], pq[i]
 }
 
@@ -44,6 +51,8 @@ func (pq *priorityQueue) Push(x any) {
 	if !ok {
 		panic("invalid interface, expected `queueNode`")
 	}
+
+	node.SetIndex(len(*pq))
 	*pq = append(*pq, node)
 }
 
