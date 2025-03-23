@@ -5,6 +5,7 @@ user:
   large: 10
   x-large: 1
   xx-large: 1
+  interval: 10
 
 cluster:
   node: 10
@@ -13,3 +14,8 @@ load-balancer:
   # allowed values: simple-round-robin, least-connections, least-response-time
   algo: simple-round-robin
   local-port: 8000
+
+experiment:
+  name: test1
+  latency: 10
+  homogeneous: true

@@ -26,9 +26,10 @@ func main() {
 	}
 
 	conf := &globConf.Cluster
+	expName := globConf.Experiment.Name
 
 	// telemetry
-	tel, err := telemetry.New("cluster-example.csv", eventHeaders)
+	tel, err := telemetry.New("cluster-"+expName+".csv", eventHeaders)
 	if err != nil {
 		panic(err)
 	}

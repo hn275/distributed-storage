@@ -86,7 +86,8 @@ func main() {
 	wg.Wait()
 
 	// write client request time data to output file
-	writeResultsToFile("clientResults.csv")
+	expName := conf.Experiment.Name
+	writeResultsToFile("client-" + expName + ".csv")
 
 	// send shutdown signal to load balancer
 

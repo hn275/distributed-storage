@@ -34,6 +34,7 @@ func main() {
 	}
 
 	conf := &globConf.LoadBalancer
+	expName := globConf.Experiment.Name
 
 	// initializing the lb
 	var lbAlgo algo.LBAlgo
@@ -46,7 +47,7 @@ func main() {
 	log.Printf("load balancing algorithm: %s\n", conf.Algorithm)
 
 	// telemetry
-	tel, err := telemetry.New("lb-example.csv", csvheaders)
+	tel, err := telemetry.New("lb-"+expName+".csv", csvheaders)
 	if err != nil {
 		panic(err)
 	}
