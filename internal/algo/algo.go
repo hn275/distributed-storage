@@ -2,10 +2,16 @@ package algo
 
 import "net"
 
+const (
+	AlgoSimpleRoundRobin  = "simple-round-robin"
+	AlgoLeastResponseTime = "least-response-time"
+)
+
 type LBAlgo interface {
 	Initialize()
 	NodeJoin(QueueNode)
 	GetNode() (QueueNode, error)
+	PutNode(QueueNode)
 }
 
 type QueueNode interface {

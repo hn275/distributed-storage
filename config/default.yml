@@ -1,10 +1,10 @@
 user:
-  x-small: 10
-  small: 10
-  medium: 10
-  large: 10
-  x-large: 5
-  xx-large: 5
+  x-small: 1
+  small: 1
+  medium: 1
+  large: 1
+  x-large: 1
+  xx-large: 1
 
 cluster:
   node: 10

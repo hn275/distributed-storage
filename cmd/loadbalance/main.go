@@ -13,17 +13,19 @@ import (
 )
 
 var (
-	logger *slog.Logger = slog.Default()
+	logger   *slog.Logger = slog.Default()
+	globConf *config.Config
 
 	supportedAlgo = map[string]algo.LBAlgo{
-		"simple-round-robin": &algo.RoundRobin{},
+		algo.AlgoSimpleRoundRobin: &algo.RoundRobin{},
 	}
 )
 
 func main() {
+	var err error
 	// reading in config file
 	configPath := internal.EnvOrDefault("CONFIG_PATH", config.DefaultConfigPath)
-	globConf, err := config.NewConfig(configPath)
+	globConf, err = config.NewConfig(configPath)
 	if err != nil {
 		log.Fatalf("failed to read config. %v", err)
 	}

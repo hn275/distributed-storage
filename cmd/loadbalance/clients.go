@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"net"
 	"sync"
 
 	"github.com/dustin/go-humanize"
+	"github.com/hn275/distributed-storage/internal/algo"
 	"github.com/hn275/distributed-storage/internal/network"
 )
 
@@ -26,7 +28,26 @@ type dataNode struct {
 	net.Conn
 	wchan chan []byte
 	id    uint16
-	log   *slog.Logger
+
+	log      *slog.Logger
+	avgRT    float64
+	requests uint64
+}
+
+func (d *dataNode) Less(other algo.QueueNode) bool {
+	switch globConf.LoadBalancer.Algorithm {
+	case "simple-round-robin":
+		return false // nop
+
+	case "least-response-time":
+		return d.avgRT < other.(*dataNode).avgRT
+
+	case "least-connection":
+		return d.requests < other.(*dataNode).requests
+
+	default:
+		panic(fmt.Sprintf("not implemented [%s].", globConf.LoadBalancer.Algorithm))
+	}
 }
 
 func makeDataNode(conn net.Conn, nodeID uint16) *dataNode {
@@ -34,7 +55,7 @@ func makeDataNode(conn net.Conn, nodeID uint16) *dataNode {
 
 	logger := slog.Default().With("node-id", nodeID)
 
-	dataNode := &dataNode{conn, wchan, nodeID, logger}
+	dataNode := &dataNode{conn, wchan, nodeID, logger, 0, 0}
 	go dataNode.listen()
 
 	// write routine
