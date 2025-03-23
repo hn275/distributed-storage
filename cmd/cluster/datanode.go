@@ -9,13 +9,14 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"sync"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/hn275/distributed-storage/internal"
 	"github.com/hn275/distributed-storage/internal/crypto"
 	"github.com/hn275/distributed-storage/internal/database"
 	"github.com/hn275/distributed-storage/internal/network"
+	"github.com/hn275/distributed-storage/internal/telemetry"
 )
 
 const randomLocalPort = "127.0.0.1:0"
@@ -23,47 +24,36 @@ const randomLocalPort = "127.0.0.1:0"
 type dataNode struct {
 	net.Conn
 	id       uint16
-	wchan    chan []byte // write channel, for concurrent socket writing
-	avgRT    float64     // average response time, in nanoseconds
-	requests uint64      // num of requests served
+	avgRT    float64 // average response time, in nanoseconds
+	requests uint64  // num of requests served
 	log      *slog.Logger
+	tel      *telemetry.Telemetry
+	mtx      *sync.Mutex
 }
 
-func makeDataNode(c net.Conn, id uint16) *dataNode {
+func makeDataNode(c net.Conn, id uint16, tel *telemetry.Telemetry) *dataNode {
 	logger := slog.Default().With("node-id", id)
 	dataNode := &dataNode{
 		Conn:     c,
 		id:       id,
-		wchan:    make(chan []byte, 10),
 		avgRT:    0.0,
 		requests: 0,
 		log:      logger,
+		tel:      tel,
+		mtx:      new(sync.Mutex),
 	}
-
-	go func(wchan <-chan []byte) {
-		for {
-			buf := <-wchan
-			if n, err := c.Write(buf); err != nil {
-				dataNode.log.Error("failed send message to LB.",
-					"type", buf[0],
-					"len", humanize.Bytes(uint64(len(buf))),
-					"err", err)
-			} else {
-				dataNode.log.Info("message sent to LB.",
-					"type", buf[0],
-					"len", humanize.Bytes(uint64(n)))
-			}
-		}
-	}(dataNode.wchan)
 
 	return dataNode
 }
 
-func (d *dataNode) write(buf []byte) {
-	d.wchan <- buf
+func (d *dataNode) Write(buf []byte) (int, error) {
+	d.mtx.Lock()
+	defer d.mtx.Unlock()
+	n, err := d.Conn.Write(buf)
+	return n, err
 }
 
-func nodeInitialize(lbAddr string, nodeID uint16) (*dataNode, error) {
+func nodeInitialize(lbAddr string, nodeID uint16, t *telemetry.Telemetry) (*dataNode, error) {
 	laddr, err := net.ResolveTCPAddr(network.ProtoTcp4, randomLocalPort)
 	if err != nil {
 		return nil, err
@@ -87,12 +77,12 @@ func nodeInitialize(lbAddr string, nodeID uint16) (*dataNode, error) {
 		return nil, err
 	}
 
-	dataNode := makeDataNode(lbSoc, nodeID)
+	dataNode := makeDataNode(lbSoc, nodeID, t)
 
 	return dataNode, nil
 }
 
-func (d *dataNode) Listen() {
+func (d *dataNode) Listen(t *telemetry.Telemetry) {
 	defer d.Close()
 
 	for {
@@ -127,6 +117,8 @@ func (d *dataNode) Listen() {
 }
 
 func (d *dataNode) handleUserJoin(buf []byte) error {
+	ts := time.Now()
+
 	if len(buf) < 13 {
 		panic("handleUserJoin insufficient buf size")
 	}
@@ -148,16 +140,22 @@ func (d *dataNode) handleUserJoin(buf []byte) error {
 		return err
 	}
 
-	d.write(buf)
+	n, err := d.Write(buf)
+	if err != nil {
+		return err
+	}
 
 	// SERVING CLIENT
 	go d.serveClient(soc, userAddr)
+	collectEvent(d.id, eventPortForward, peerLB, ts, d.tel, uint64(n))
 
 	return nil
 }
 
 func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) {
 	defer soc.Close()
+
+	ts := time.Now()
 
 	user, err := soc.Accept()
 	if err != nil {
@@ -228,14 +226,18 @@ func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) {
 	// send it over the wire
 	plaintext := fileContent[crypto.NonceSize : len(fileContent)-crypto.OverHead]
 
-	_, err = user.Write(plaintext)
+	n, err := user.Write(plaintext)
 	if err != nil {
 		d.log.Error("failed to write to socket.",
 			"err", err)
 	}
+
+	collectEvent(d.id, eventFileTransfer, peerUser, ts, d.tel, uint64(n))
 }
 
 func (d *dataNode) healthCheckReport(srvStartTime *time.Time) {
+	ts := time.Now()
+
 	// calculate the next average
 	dur := float64(time.Since(*srvStartTime).Nanoseconds())
 	d.avgRT = internal.CalcMovingAvg(d.requests, d.avgRT, dur)
@@ -247,8 +249,13 @@ func (d *dataNode) healthCheckReport(srvStartTime *time.Time) {
 
 	bufWriter := bytes.NewBuffer(buf)
 	if err := binary.Write(bufWriter, network.BinaryEndianess, d.avgRT); err != nil {
-		panic(err) // TODO: handle this error
+		panic(err) // TODO: log this
 	}
 
-	d.write(bufWriter.Bytes())
+	n, err := d.Write(bufWriter.Bytes())
+	if err != nil {
+		panic(err) // TODO: log this
+	}
+
+	collectEvent(d.id, eventHealthCheck, peerLB, ts, d.tel, uint64(n))
 }

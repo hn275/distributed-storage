@@ -7,6 +7,7 @@ import (
 
 	"github.com/hn275/distributed-storage/internal"
 	"github.com/hn275/distributed-storage/internal/config"
+	"github.com/hn275/distributed-storage/internal/telemetry"
 )
 
 var (
@@ -26,6 +27,14 @@ func main() {
 
 	conf := &globConf.Cluster
 
+	// telemetry
+	tel, err := telemetry.New("cluster-example.csv", eventHeaders)
+	if err != nil {
+		panic(err)
+	}
+
+	defer tel.Done()
+
 	// initialize cluster
 	slog.Info(
 		"initializing cluster.",
@@ -40,7 +49,7 @@ func main() {
 		go func(wg *sync.WaitGroup, nodeIndex uint16) {
 			defer wg.Done()
 
-			node, err := nodeInitialize(lbNodeAddr, nodeID)
+			node, err := nodeInitialize(lbNodeAddr, nodeID, tel)
 			if err != nil {
 				slog.Error(
 					"failed to initialize a data node.",
@@ -51,10 +60,10 @@ func main() {
 
 			slog.Info(
 				"node online.",
-				"node-index", nodeID,
+				"node-id", nodeID,
 				"addr", node.LocalAddr(),
 			)
-			node.Listen()
+			node.Listen(tel)
 		}(wg, nodeID)
 	}
 
