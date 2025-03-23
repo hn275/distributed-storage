@@ -18,6 +18,7 @@ func (rr *RoundRobin) Initialize() {
 func (rr *RoundRobin) NodeJoin(node QueueNode) {
 	rr.queue = append(rr.queue, node)
 }
+
 func (rr *RoundRobin) GetNode() (QueueNode, error) {
 	if len(rr.queue) == 0 {
 		return nil, fmt.Errorf("no node can be scheduled.")
@@ -27,4 +28,8 @@ func (rr *RoundRobin) GetNode() (QueueNode, error) {
 	rr.index = (rr.index + 1) % len(rr.queue)
 
 	return node, nil
+}
+
+func (rr *RoundRobin) PutNode(node QueueNode) {
+	// nop
 }

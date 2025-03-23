@@ -3,30 +3,7 @@ package algo
 import (
 	"container/heap"
 	"errors"
-	"net"
 )
-
-// A node for least response time algo
-type LRTNode struct {
-	net.Conn
-	requests uint64
-	// average response time
-	avgRT float64
-}
-
-// LRTNode implements queueNodeCmp
-func (left *LRTNode) Less(other QueueNode) bool {
-	right, ok := other.(*LRTNode)
-	if !ok {
-		panic("invalid type, expected '*LRTNode'")
-	}
-
-	if left.avgRT == right.avgRT {
-		return left.requests < right.requests
-	}
-
-	return left.avgRT < right.avgRT
-}
 
 type LeastResponseTime struct {
 	priorityQueue
@@ -38,20 +15,20 @@ func (lrt *LeastResponseTime) Initialize() {
 }
 
 // LeastResponseTime implements LBAlgo
-func (lrt *LeastResponseTime) NodeJoin(node QueueNode) error {
+func (lrt *LeastResponseTime) NodeJoin(node QueueNode) {
 	heap.Push(lrt, node)
-	return nil
 }
 
 // LeastResponseTime implements LBAlgo
-func (lrt *LeastResponseTime) GetNode() (net.Conn, error) {
+func (lrt *LeastResponseTime) GetNode() (QueueNode, error) {
 	if lrt.Len() == 0 {
-		return nil, errors.New("no node to dispatch")
+		return nil, errors.New("queue empty")
 	}
-
-	node := heap.Pop(lrt).(*LRTNode)
-	node.requests += 1
-
-	heap.Push(lrt, node)
+	node := heap.Pop(lrt).(QueueNode)
 	return node, nil
+}
+
+// LeastResponseTime implements LBAlgo
+func (lrt *LeastResponseTime) PutNode(node QueueNode) {
+	lrt.NodeJoin(node)
 }

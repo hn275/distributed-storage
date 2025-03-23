@@ -102,13 +102,16 @@ func (lb *loadBalancer) userJoinHandler(user net.Conn, _ []byte) error {
 	lb.lock.Lock()
 	defer lb.lock.Unlock()
 
-	_node, err := lb.engine.GetNode()
+	node, err := lb.engine.GetNode()
 	if err != nil {
 		return err
 	}
-	node := _node.(*dataNode)
 
-	node.write(buf[:])
+	node.(*dataNode).write(buf[:])
+
+	if _, err := node.(net.Conn).Write(buf[:]); err != nil {
+		return err
+	}
 
 	cxMap.setClient(user)
 
@@ -124,9 +127,9 @@ func (lb *loadBalancer) nodeJoinHandler(node net.Conn, msg []byte) error {
 
 	dataNode := makeDataNode(node, nodeId)
 	lb.lock.Lock()
-	err := lb.engine.NodeJoin(dataNode)
+	lb.engine.NodeJoin(dataNode)
 	lb.lock.Unlock()
 
 	dataNode.log.Info("new data node.", "remote_addr", node.RemoteAddr())
-	return err
+	return nil
 }
