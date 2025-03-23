@@ -13,6 +13,7 @@ type Config struct {
 	User         userYaml
 	Cluster      clusterYaml
 	LoadBalancer loadbalancerYaml `yaml:"load-balancer"`
+	Experiment   ExperimentYaml
 }
 
 type clusterYaml struct {
@@ -25,12 +26,19 @@ type loadbalancerYaml struct {
 }
 
 type userYaml struct {
-	Xsmall  int `yaml:"x-small"`
-	Small   int `yaml:"small"`
-	Medium  int `yaml:"medium"`
-	Large   int `yaml:"large"`
-	Xlarge  int `yaml:"x-large"`
-	XXlarge int `yaml:"xx-large"`
+	Xsmall   int    `yaml:"x-small"`
+	Small    int    `yaml:"small"`
+	Medium   int    `yaml:"medium"`
+	Large    int    `yaml:"large"`
+	Xlarge   int    `yaml:"x-large"`
+	XXlarge  int    `yaml:"xx-large"`
+	Interval uint32 `yaml:"interval"`
+}
+
+type ExperimentYaml struct {
+	Name        string `yaml:"name"`
+	Latency     uint32 `yaml:"interval"`
+	Homogeneous bool   `yaml:"bool"`
 }
 
 func NewConfig(configPath string) (*Config, error) {
