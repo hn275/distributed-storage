@@ -22,7 +22,7 @@ const (
 )
 
 var eventHeaders = []string{
-	"event-type", "peer", "timestamp", "duration(ns)", "bytes-transferred",
+	"node-id", "event-type", "peer", "timestamp", "duration(ns)", "bytes-transferred",
 }
 
 // telemetry
@@ -38,9 +38,10 @@ type event struct {
 // Row implements telemetry.Record.
 func (e *event) Row() []string {
 	return []string{
+		fmt.Sprintf("%d", e.nodeID),
 		string(e.eventType),
 		string(e.peer),
-		e.timestamp.Format("15:04:05.000"),
+		fmt.Sprintf("%d", e.timestamp.UnixNano()),
 		fmt.Sprintf("%d", e.duration),
 		humanize.Bytes(e.size),
 	}

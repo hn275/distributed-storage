@@ -39,7 +39,7 @@ func (e *event) Row() []string {
 		e.eType,
 		e.peer,
 		fmt.Sprintf("%d", e.peerID),
-		e.timestamp.Format("15:04:05.000"),
+		fmt.Sprintf("%d", e.timestamp.UnixNano()),
 		fmt.Sprintf("%d", e.duration),
 	}
 }
