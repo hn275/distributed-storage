@@ -11,7 +11,13 @@ import (
 
 // testStruct implements net.Conn
 type testStruct struct {
-	id float64
+	id    float64
+	index int
+}
+
+// SetIndex implements QueueNode.
+func (t *testStruct) SetIndex(i int) {
+	t.index = i
 }
 
 // testStruct implements QueueNode

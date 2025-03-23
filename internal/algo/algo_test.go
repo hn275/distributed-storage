@@ -11,7 +11,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type testPQ struct{ float64 }
+type testPQ struct {
+	float64
+	index int
+}
+
+// SetIndex implements QueueNode.
+func (t *testPQ) SetIndex(i int) {
+	t.index = i
+}
 
 // LocalAddr implements QueueNode.
 func (t *testPQ) LocalAddr() net.Addr {
@@ -61,13 +69,13 @@ func (tpq *testPQ) Less(other QueueNode) bool {
 func TestPriorityQueueSortInterface(t *testing.T) {
 	pq := make(priorityQueue, 7)
 
-	pq[0] = &testPQ{1.0}
-	pq[1] = &testPQ{1.1}
-	pq[2] = &testPQ{1.2}
-	pq[3] = &testPQ{1.3}
-	pq[4] = &testPQ{1.4}
-	pq[5] = &testPQ{1.4}
-	pq[6] = &testPQ{0.4}
+	pq[0] = &testPQ{1.0, 0}
+	pq[1] = &testPQ{1.1, 0}
+	pq[2] = &testPQ{1.2, 0}
+	pq[3] = &testPQ{1.3, 0}
+	pq[4] = &testPQ{1.4, 0}
+	pq[5] = &testPQ{1.4, 0}
+	pq[6] = &testPQ{0.4, 0}
 
 	// Len()
 	assert.Equal(t, len(pq), pq.Len())
@@ -97,7 +105,7 @@ func TestPriorityQueueHeapInterface(t *testing.T) {
 
 	for i := 0; i < N; i++ {
 		v := rand.Float64()
-		pq[i] = &testPQ{v}
+		pq[i] = &testPQ{v, 0}
 		expectedValues[i] = v
 	}
 
@@ -115,7 +123,7 @@ func TestPriorityQueueHeapInterface(t *testing.T) {
 
 	// test push and pop in order
 	for i := 0; i < N; i++ {
-		heap.Push(&pq, &testPQ{expectedValues[N-i-1]})
+		heap.Push(&pq, &testPQ{expectedValues[N-i-1], 0})
 		assert.Equal(t, i+1, pq.Len())
 	}
 
@@ -123,5 +131,30 @@ func TestPriorityQueueHeapInterface(t *testing.T) {
 		v := heap.Pop(&pq).(QueueNode)
 		assert.Equal(t, expectedValues[i], v.(*testPQ).float64)
 		assert.Equal(t, N-i-1, pq.Len())
+	}
+}
+
+// indexing is updated on queue update
+func TestPriorityQueueIndexMangement(t *testing.T) {
+	const N = 16
+	pq := make(priorityQueue, 0, N)
+
+	for i := 0; i < N; i++ {
+		v := rand.Float64()
+		node := &testPQ{v, 0}
+		heap.Push(&pq, node)
+	}
+
+	for i, node := range pq {
+		assert.Equal(t, i, node.(*testPQ).index)
+	}
+
+	// pop then push some
+	node := pq.Pop().(*testPQ)
+	node.float64 = 0.0
+	pq.Push(node)
+
+	for i, node := range pq {
+		assert.Equal(t, i, node.(*testPQ).index)
 	}
 }

@@ -33,3 +33,8 @@ func (rr *RoundRobin) GetNode() (QueueNode, error) {
 func (rr *RoundRobin) PutNode(node QueueNode) {
 	// nop
 }
+
+func (rr *RoundRobin) Fix(int) error {
+	// nop
+	return nil
+}
