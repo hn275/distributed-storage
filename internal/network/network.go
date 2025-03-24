@@ -14,7 +14,8 @@ const (
 	HealthCheck
 	ShutdownSig
 
-	ProtoTcp4 string = "tcp4"
+	ProtoTcp4       = "tcp4"
+	RandomLocalPort = "127.0.0.1:0"
 )
 
 var (

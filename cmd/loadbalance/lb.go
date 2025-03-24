@@ -87,7 +87,6 @@ func handle(fn lbHandler, conn net.Conn, msg []byte) {
 // listener
 func (lbSrv *loadBalancer) listen() {
 	for {
-		buf := [16]byte{}
 		conn, err := lbSrv.Accept()
 		if err != nil {
 			logger.Error("failed to accept new conn.",
@@ -97,7 +96,8 @@ func (lbSrv *loadBalancer) listen() {
 			continue
 		}
 
-		n, err := conn.Read(buf[:])
+		buf := make([]byte, 16)
+		n, err := conn.Read(buf)
 		if err != nil {
 			// silent continue if peer disconnected
 			if !errors.Is(err, io.EOF) {
@@ -115,7 +115,7 @@ func (lbSrv *loadBalancer) listen() {
 
 		case network.UserNodeJoin:
 			logger.Info("new user.", "remote_addr", conn.RemoteAddr())
-			go handle(lbSrv.userJoinHandler, conn, nil)
+			go handle(lbSrv.userJoinHandler, conn, buf)
 
 		case network.ShutdownSig:
 			return
@@ -127,13 +127,8 @@ func (lbSrv *loadBalancer) listen() {
 	}
 }
 
-func (lb *loadBalancer) userJoinHandler(user net.Conn, _ []byte) error {
+func (lb *loadBalancer) userJoinHandler(user net.Conn, buf []byte) error {
 	ts := time.Now()
-	// port fowarding
-	buf := [16]byte{network.UserNodeJoin}
-	if err := network.AddrToBytes(user.RemoteAddr(), buf[1:7]); err != nil {
-		panic(err)
-	}
 
 	// request for a data node
 	lb.lock.Lock()
@@ -147,8 +142,9 @@ func (lb *loadBalancer) userJoinHandler(user net.Conn, _ []byte) error {
 	nodeQ := node.(*dataNode)
 	nodeQ.requests += 1
 
+	// port fowarding
 	nodeQ.write(buf[:])
-	cxMap.setClient(user)
+	cxMap.setClient(user) // TODO: may not need this
 
 	lb.engine.PutNode(nodeQ)
 

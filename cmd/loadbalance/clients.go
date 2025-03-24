@@ -102,8 +102,8 @@ func (dn *dataNode) write(buf []byte) {
 
 func (d *dataNode) listen() {
 	for {
-		buf := [16]byte{}
-		_, err := d.Read(buf[:])
+		buf := make([]byte, 16)
+		_, err := d.Read(buf)
 		if err != nil {
 			d.log.Error("failed to read socket",
 				"err", err)
@@ -112,10 +112,10 @@ func (d *dataNode) listen() {
 
 		switch buf[0] {
 		case network.PortForwarding:
-			go d.handlePortForward(buf[:])
+			go d.handlePortForward(buf)
 
 		case network.HealthCheck:
-			go d.handleHealthCheck(buf[:])
+			go d.handleHealthCheck(buf)
 
 		default:
 			d.log.Error("unsupported message type", "type", buf[0])
@@ -176,8 +176,9 @@ func (dn *dataNode) handlePortForward(buf []byte) {
 	defer client.Close()
 
 	if _, err := client.Write(buf[7:13]); err != nil {
-		dn.log.Error("failed to forward port to client.",
-			"client", client.RemoteAddr())
+		dn.log.Error("address forwarding failed.",
+			"client", client.RemoteAddr(),
+			"err", err)
 	} else {
 		dn.log.Info("address forwarded to client.",
 			"client", client.RemoteAddr())
