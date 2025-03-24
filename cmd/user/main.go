@@ -242,7 +242,7 @@ func request(fileHash string, wg *sync.WaitGroup) (int64, error) {
 	// slog.Info("file name + pub key sent", "addr", dataConn.RemoteAddr())
 
 	// write responses to hasher
-	h := blake3.New(32, nil)
+	h := blake3.New(crypto.DigestSize, crypto.UserPublicKey[:])
 
 	byteCopied, err := io.Copy(h, dataConn)
 	if err != nil {
