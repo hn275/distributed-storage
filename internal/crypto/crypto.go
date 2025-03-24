@@ -8,7 +8,7 @@ import (
 
 const (
 	NonceSize = chacha20poly1305.NonceSizeX
-	OverHead  = chacha20poly1305.Overhead
+	TagSize   = chacha20poly1305.Overhead
 )
 
 var (
