@@ -11,7 +11,7 @@ import (
 func TestEncrypt(t *testing.T) {
 	plaintext := "Hello, world!"
 
-	buf := make([]byte, NonceSize+OverHead+len(plaintext))
+	buf := make([]byte, NonceSize+TagSize+len(plaintext))
 
 	_, err := io.ReadFull(rand.Reader, buf[:NonceSize])
 	assert.Nil(t, err)
@@ -42,7 +42,7 @@ func TestEncrypt(t *testing.T) {
 func TestDecrypt(t *testing.T) {
 	// encrypt data
 	plaintext := "Hello, world!"
-	buf := make([]byte, NonceSize+OverHead+len(plaintext))
+	buf := make([]byte, NonceSize+TagSize+len(plaintext))
 	_, _ = io.ReadFull(rand.Reader, buf[:NonceSize])
 	copy(buf[NonceSize:], []byte(plaintext))
 

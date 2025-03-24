@@ -224,7 +224,7 @@ func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) {
 	}
 
 	// send it over the wire
-	plaintext := fileContent[crypto.NonceSize : len(fileContent)-crypto.OverHead]
+	plaintext := fileContent[crypto.NonceSize : len(fileContent)-crypto.TagSize]
 
 	n, err := user.Write(plaintext)
 	if err != nil {
