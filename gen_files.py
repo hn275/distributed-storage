@@ -53,7 +53,8 @@ def gen_config(name, algo, homog, latency, interval, files):
              f"experiment:\n" + \
              f"  name: {name}\n" + \
              f"  latency: {latency}\n"+ \
-             f"  homogeneous: {str(homog).lower()}"
+             f"  homogeneous: {str(homog).lower()}\n" + \
+             f"  overhead-param: 1000" # change this, it's in nanoseconds
     return config
 
 def get_requests(rate, interval, sz):

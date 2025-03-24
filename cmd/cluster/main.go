@@ -1,8 +1,9 @@
 package main
 
 import (
-	"flag"
+	"fmt"
 	"log/slog"
+	"math/rand"
 	"sync"
 
 	"github.com/hn275/distributed-storage/internal"
@@ -10,13 +11,7 @@ import (
 	"github.com/hn275/distributed-storage/internal/telemetry"
 )
 
-var (
-	lbNodeAddr string
-)
-
 func main() {
-	flag.StringVar(&lbNodeAddr, "addr", "127.0.0.1:8000", "Load Balancing address")
-	flag.Parse()
 
 	// reading in config
 	configPath := internal.EnvOrDefault("CONFIG_PATH", config.DefaultConfigPath)
@@ -27,6 +22,9 @@ func main() {
 
 	conf := &globConf.Cluster
 	expName := globConf.Experiment.Name
+
+	// parse load balancing address
+	lbNodeAddr := fmt.Sprintf("127.0.0.1:%d", globConf.LoadBalancer.LocalPort)
 
 	// telemetry
 	filePath := "tmp/output/cluster/cluster-" + expName + ".csv"
@@ -51,7 +49,12 @@ func main() {
 		go func(wg *sync.WaitGroup, nodeIndex uint16) {
 			defer wg.Done()
 
-			node, err := nodeInitialize(lbNodeAddr, nodeID, tel)
+			overHeadParam := int64(0)
+			if !globConf.Experiment.Homogeneous {
+				overHeadParam = rand.Int63n(globConf.Experiment.OverheadParam)
+			}
+
+			node, err := nodeInitialize(lbNodeAddr, nodeID, tel, overHeadParam)
 			if err != nil {
 				slog.Error(
 					"failed to initialize a data node.",
@@ -60,12 +63,7 @@ func main() {
 				)
 			}
 
-			slog.Info(
-				"node online.",
-				"node-id", nodeID,
-				"addr", node.LocalAddr(),
-			)
-			node.Listen(tel)
+			node.Listen()
 		}(wg, nodeID)
 	}
 

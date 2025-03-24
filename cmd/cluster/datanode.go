@@ -23,24 +23,28 @@ const randomLocalPort = "127.0.0.1:0"
 
 type dataNode struct {
 	net.Conn
-	id       uint16
-	avgRT    float64 // average response time, in nanoseconds
-	requests uint64  // num of requests served
-	log      *slog.Logger
-	tel      *telemetry.Telemetry
-	mtx      *sync.Mutex
+
+	id            uint16
+	avgRT         float64 // average response time, in nanoseconds
+	requests      uint64  // num of requests served
+	overHeadParam int64   // overhead in nano seconds, this is for sleep
+
+	log *slog.Logger
+	tel *telemetry.Telemetry
+	mtx *sync.Mutex
 }
 
-func makeDataNode(c net.Conn, id uint16, tel *telemetry.Telemetry) *dataNode {
+func makeDataNode(c net.Conn, id uint16, tel *telemetry.Telemetry, overHeadparam int64) *dataNode {
 	logger := slog.Default().With("node-id", id)
 	dataNode := &dataNode{
-		Conn:     c,
-		id:       id,
-		avgRT:    0.0,
-		requests: 0,
-		log:      logger,
-		tel:      tel,
-		mtx:      new(sync.Mutex),
+		Conn:          c,
+		id:            id,
+		avgRT:         0.0,
+		requests:      0,
+		overHeadParam: overHeadparam,
+		log:           logger,
+		tel:           tel,
+		mtx:           new(sync.Mutex),
 	}
 
 	return dataNode
@@ -53,7 +57,7 @@ func (d *dataNode) Write(buf []byte) (int, error) {
 	return n, err
 }
 
-func nodeInitialize(lbAddr string, nodeID uint16, t *telemetry.Telemetry) (*dataNode, error) {
+func nodeInitialize(lbAddr string, nodeID uint16, t *telemetry.Telemetry, overHeadParam int64) (*dataNode, error) {
 	laddr, err := net.ResolveTCPAddr(network.ProtoTcp4, randomLocalPort)
 	if err != nil {
 		return nil, err
@@ -77,13 +81,39 @@ func nodeInitialize(lbAddr string, nodeID uint16, t *telemetry.Telemetry) (*data
 		return nil, err
 	}
 
-	dataNode := makeDataNode(lbSoc, nodeID, t)
+	dataNode := makeDataNode(lbSoc, nodeID, t, overHeadParam)
 
 	return dataNode, nil
 }
 
-func (d *dataNode) Listen(t *telemetry.Telemetry) {
-	defer d.Close()
+func (d *dataNode) Listen() {
+	d.tel.Collect(&event{
+		nodeID:       d.id,
+		nodeOverhead: d.overHeadParam,
+		eventType:    eventNodeOnline,
+		peer:         "",
+		timestamp:    time.Now(),
+		duration:     0,
+		size:         0,
+	})
+
+	defer func() {
+		d.Close()
+		d.tel.Collect(&event{
+			nodeID:       d.id,
+			nodeOverhead: d.overHeadParam,
+			eventType:    eventNodeOffline,
+			peer:         "",
+			timestamp:    time.Now(),
+			duration:     0,
+			size:         0,
+		})
+	}()
+
+	d.log.Info(
+		"node online.",
+		"addr", d.LocalAddr(),
+	)
 
 	for {
 		buf := make([]byte, 16)
@@ -117,19 +147,22 @@ func (d *dataNode) Listen(t *telemetry.Telemetry) {
 }
 
 func (d *dataNode) handleUserJoin(buf []byte) error {
-	ts := time.Now()
-	defer d.healthCheckReport(&ts)
-
 	if len(buf) != 16 {
 		panic("handleUserJoin invalid buf size")
 	}
 
+	ts := time.Now()
+	defer d.healthCheckReport(&ts)
+
+	time.Sleep(time.Nanosecond * time.Duration(d.overHeadParam))
+
+	// get user's listener address and dial
 	userAddr, err := network.BytesToAddr(buf[1:7])
 	if err != nil {
 		return err
 	}
 
-	// open a new port for user to dial
+	// dials to user's listener
 	user, err := net.DialTCP(network.ProtoTcp4, nil, userAddr.(*net.TCPAddr))
 	if err != nil {
 		return err
@@ -138,9 +171,7 @@ func (d *dataNode) handleUserJoin(buf []byte) error {
 	defer user.Close()
 
 	// SERVING CLIENT
-	// collectEvent(d.id, eventPortForward, peerLB, ts, d.tel, uint64(n))
-
-	d.log.Info("user connected.", "addr", user.RemoteAddr())
+	d.log.Info("connected to user.", "addr", user.RemoteAddr())
 
 	// get file digest + pub key from user
 	var fileBuf [64]byte
@@ -172,7 +203,16 @@ func (d *dataNode) handleUserJoin(buf []byte) error {
 		return err
 	}
 
-	collectEvent(d.id, eventHealthCheck, peerLB, ts, d.tel, uint64(n))
+	d.tel.Collect(&event{
+		nodeID:       d.id,
+		nodeOverhead: d.overHeadParam,
+		eventType:    eventFileTransfer,
+		peer:         peerLB,
+		timestamp:    ts,
+		duration:     uint64(time.Since(ts).Nanoseconds()),
+		size:         uint64(n),
+	})
+
 	return nil
 }
 
@@ -190,7 +230,7 @@ func (d *dataNode) healthCheckReport(srvStartTime *time.Time) {
 
 	bufWriter := bytes.NewBuffer(buf[1:1])
 	if err := binary.Write(bufWriter, network.BinaryEndianess, d.avgRT); err != nil {
-		panic(err) // TODO: Pad + log this
+		panic(err) // TODO: log this
 	}
 
 	n, err := d.Write(buf)
@@ -198,5 +238,13 @@ func (d *dataNode) healthCheckReport(srvStartTime *time.Time) {
 		panic(err) // TODO: log this
 	}
 
-	collectEvent(d.id, eventHealthCheck, peerLB, ts, d.tel, uint64(n))
+	d.tel.Collect(&event{
+		nodeID:       d.id,
+		nodeOverhead: d.overHeadParam,
+		eventType:    eventHealthCheck,
+		peer:         peerLB,
+		timestamp:    ts,
+		duration:     uint64(time.Since(ts).Nanoseconds()),
+		size:         uint64(n),
+	})
 }
