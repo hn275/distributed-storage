@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 ALG_OPTIONS = (("rr", "simple-round-robin"), ("lc", "least-connections"), ("lrt", "least-response-time"))
 HOMOG_OPTIONS = (True, False)
 INTERVAL = 10
@@ -10,7 +12,6 @@ def gen_config(name, algo, homog, latency, interval, files):
              f"  small: {files[0]}\n" + \
              f"  medium: {files[1]}\n"+ \
              f"  large: {files[2]}\n" + \
-             f"  large: 0\n" + \
              f"  x-large: 0\n" + \
              f"  xx-large: 0\n" + \
              f"  interval: {interval}\n" + \
