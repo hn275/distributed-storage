@@ -19,6 +19,14 @@ type Telemetry struct {
 	endChan chan struct{}
 }
 
+func init() {
+	for _, v := range []string{"cluster", "lb", "user"} {
+		if err := os.MkdirAll("tmp/output/"+v, 0755); err != nil {
+			panic(err)
+		}
+	}
+}
+
 func New(outFileName string, headers []string) (*Telemetry, error) {
 	fd, err := os.OpenFile(outFileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil {
