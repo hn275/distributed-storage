@@ -106,7 +106,7 @@ func main() {
 }
 
 func writeResultsToFile(filename string) {
-	dir := "client-telemetry-results"
+	dir := "tmp/output/user"
 
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		slog.Error("error creating directory",
