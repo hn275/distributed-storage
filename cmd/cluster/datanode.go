@@ -86,9 +86,9 @@ func (d *dataNode) Listen(t *telemetry.Telemetry) {
 	defer d.Close()
 
 	for {
-		var buf [16]byte
+		buf := make([]byte, 16)
 		// get a request from LB
-		_, err := d.Read(buf[:])
+		_, err := d.Read(buf)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				d.log.Info("load balancer disconnected.")
@@ -102,7 +102,7 @@ func (d *dataNode) Listen(t *telemetry.Telemetry) {
 		switch buf[0] {
 		case network.UserNodeJoin:
 			go func() {
-				if err := d.handleUserJoin(buf[:]); err != nil {
+				if err := d.handleUserJoin(buf); err != nil {
 					d.log.Error("failed to service UserNodeJoin",
 						"err", err)
 				}
@@ -118,9 +118,10 @@ func (d *dataNode) Listen(t *telemetry.Telemetry) {
 
 func (d *dataNode) handleUserJoin(buf []byte) error {
 	ts := time.Now()
+	defer d.healthCheckReport(&ts)
 
-	if len(buf) < 13 {
-		panic("handleUserJoin insufficient buf size")
+	if len(buf) != 16 {
+		panic("handleUserJoin invalid buf size")
 	}
 
 	userAddr, err := network.BytesToAddr(buf[1:7])
@@ -129,67 +130,22 @@ func (d *dataNode) handleUserJoin(buf []byte) error {
 	}
 
 	// open a new port for user to dial
-	soc, err := net.Listen(network.ProtoTcp4, randomLocalPort)
+	user, err := net.DialTCP(network.ProtoTcp4, nil, userAddr.(*net.TCPAddr))
 	if err != nil {
 		return err
-	}
-
-	// PORT FORWARD TO LB
-	buf[0] = network.PortForwarding
-	if err := network.AddrToBytes(soc.Addr(), buf[7:13]); err != nil {
-		return err
-	}
-
-	n, err := d.Write(buf)
-	if err != nil {
-		return err
-	}
-
-	// SERVING CLIENT
-	go d.serveClient(soc, userAddr)
-	collectEvent(d.id, eventPortForward, peerLB, ts, d.tel, uint64(n))
-
-	return nil
-}
-
-func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) {
-	defer soc.Close()
-
-	ts := time.Now()
-
-	user, err := soc.Accept()
-	if err != nil {
-		d.log.Error("failed to accept new connection",
-			"err", err)
-		return
 	}
 
 	defer user.Close()
 
-	// check for the connection, need to match with `userAddr`
-	sameUser := user.
-		RemoteAddr().(*net.TCPAddr).
-		IP.
-		Equal(userAddr.(*net.TCPAddr).IP)
-	if !sameUser {
-		d.log.Error("invalid user connection.",
-			"expected", userAddr,
-			"connected", user.RemoteAddr())
-		return
-	}
+	// SERVING CLIENT
+	// collectEvent(d.id, eventPortForward, peerLB, ts, d.tel, uint64(n))
 
 	d.log.Info("user connected.", "addr", user.RemoteAddr())
-
-	srvTimeStart := new(time.Time)
-	*srvTimeStart = time.Now()
-	defer d.healthCheckReport(srvTimeStart)
 
 	// get file digest + pub key from user
 	var fileBuf [64]byte
 	if _, err := user.Read(fileBuf[:]); err != nil {
-		d.log.Error("failed to read socket.",
-			"err", err)
-		return
+		return err
 	}
 
 	fileName := hex.EncodeToString(fileBuf[:32])
@@ -198,9 +154,7 @@ func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) {
 	// read + decrypt file
 	file, err := os.OpenFile(filePath, os.O_RDONLY, 0666)
 	if err != nil {
-		d.log.Error("failed to read file.",
-			"file-path", filePath)
-		return
+		return err
 	}
 
 	var (
@@ -210,21 +164,16 @@ func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) {
 
 	s, err := crypto.NewFileStream(secKey, pubKey)
 	if err != nil {
-		d.log.Error("failed to initialize stream.",
-			"err", err,
-			"file", filePath)
-		return
+		return err
 	}
 
 	n, err := s.DecryptAndCopy(user, file)
 	if err != nil {
-		d.log.Error("failed to decrypt content.",
-			"err", err,
-			"file", filePath)
-		return
+		return err
 	}
 
-	collectEvent(d.id, eventFileTransfer, peerUser, ts, d.tel, uint64(n))
+	collectEvent(d.id, eventHealthCheck, peerLB, ts, d.tel, uint64(n))
+	return nil
 }
 
 func (d *dataNode) healthCheckReport(srvStartTime *time.Time) {
@@ -236,15 +185,15 @@ func (d *dataNode) healthCheckReport(srvStartTime *time.Time) {
 	d.requests += 1
 
 	// sends health check packet to LB
-	buf := make([]byte, 1, 16)
+	buf := make([]byte, 16)
 	buf[0] = network.HealthCheck
 
-	bufWriter := bytes.NewBuffer(buf)
+	bufWriter := bytes.NewBuffer(buf[1:1])
 	if err := binary.Write(bufWriter, network.BinaryEndianess, d.avgRT); err != nil {
-		panic(err) // TODO: log this
+		panic(err) // TODO: Pad + log this
 	}
 
-	n, err := d.Write(bufWriter.Bytes())
+	n, err := d.Write(buf)
 	if err != nil {
 		panic(err) // TODO: log this
 	}
