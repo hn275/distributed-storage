@@ -1,0 +1,3 @@
+# Ignore everything in config directory, but not the file default.yml
+*.yml
+!/default.yml

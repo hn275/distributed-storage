@@ -27,3 +27,4 @@ go.work.sum
 # generated output files
 *.csv
 **/plots/*
+log/
