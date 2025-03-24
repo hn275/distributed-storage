@@ -15,7 +15,7 @@ const (
 	Prefix        = "tmp/data/"
 	AccessCluster = Path("cluster")
 	AccessUser    = Path("user")
-	fileOverhead  = crypto.OverHead + crypto.NonceSize
+	fileOverhead  = crypto.TagSize + crypto.NonceSize
 	digestSize    = 32
 )
 
