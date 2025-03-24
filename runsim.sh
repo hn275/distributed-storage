@@ -19,5 +19,6 @@ for file in ./config/*; do
 	if [ -f "$file" ]; then
 		echo "Running simulation: $file"
 		runsim $file
+		sleep 2 # sleep so the load balancer and cluster can shutdown properly
 	fi
 done
