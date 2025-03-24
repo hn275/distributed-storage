@@ -1,13 +1,19 @@
 package main
 
 import (
+	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 
 	"github.com/dustin/go-humanize"
+	"github.com/hn275/distributed-storage/internal/crypto"
 	"github.com/hn275/distributed-storage/internal/database"
+	"lukechampine.com/blake3"
 )
 
 var fileSizeOpts = [...]uint64{
@@ -36,7 +42,7 @@ func main() {
 	db := database.FileIndex{}
 
 	for i, fileSize := range fileSizeOpts {
-		fileBytes, fileName, err := database.MakeFile(fileSize)
+		fileBytes, fileName, err := makeFile(fileSize)
 		if err != nil {
 			panic(err)
 		}
@@ -69,7 +75,10 @@ func main() {
 			panic("index out of bound")
 		}
 
-		log.Printf("file created\t%s\t%s", fileName, humanize.Bytes(fileSize))
+		log.Printf("file created\t%s\t%s -> %s",
+			fileName,
+			humanize.Bytes(fileSize),
+			humanize.Bytes(uint64(len(fileBytes))))
 	}
 
 	indexFileName := database.AccessUser.Append("file-index.json").String()
@@ -109,4 +118,30 @@ func createDir(dir string) error {
 	log.Printf("dir created\t\t%s\n", dir)
 
 	return nil
+}
+
+// return the (encrypted) content, and the file name, which is the hex encoded
+// 32 byte hash of the non-encrypted content
+func makeFile(fileSize uint64) ([]byte, string, error) {
+	fileData := make([]byte, fileSize)
+	if _, err := io.ReadFull(rand.Reader, fileData); err != nil {
+		return nil, "", err
+	}
+
+	s, err := crypto.NewFileStream(
+		crypto.DataNodeSecretKey[:], crypto.UserPublicKey[:],
+	)
+	if err != nil {
+		return nil, "", err
+	}
+
+	h := blake3.New(crypto.DigestSize, crypto.UserPublicKey[:])
+
+	buf := &bytes.Buffer{}
+	if _, err := s.EncryptAndCopy(buf, bytes.NewReader(fileData), h); err != nil {
+		return nil, "", err
+	}
+
+	fileName := hex.EncodeToString(h.Sum(nil))
+	return buf.Bytes(), fileName, nil
 }
