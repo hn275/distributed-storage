@@ -1,14 +1,10 @@
 package database
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
-	"io"
 	"os"
 
 	"github.com/hn275/distributed-storage/internal/crypto"
-	"lukechampine.com/blake3"
 )
 
 const (
@@ -31,42 +27,6 @@ func (p Path) Append(path string) Path {
 	}
 
 	return Path(string(p) + "/" + path)
-}
-
-// return the (encrypted) content, and the file name, which is the hex encoded
-// 32 byte hash of the non-encrypted content
-func MakeFile(fileSize uint64) ([]byte, string, error) {
-	buf := make([]byte, fileSize+fileOverhead)
-	if _, err := io.ReadFull(rand.Reader, buf[:fileSize]); err != nil {
-		return nil, "", err
-	}
-
-	var (
-		key       = crypto.DataNodeSecretKey[:]
-		aad       = crypto.UserPublicKey[:]
-		nonce     = buf[:crypto.NonceSize]
-		plaintext = buf[crypto.NonceSize : crypto.NonceSize+fileSize]
-	)
-
-	// hash the content for file name
-	h := blake3.New(digestSize, nil)
-	if _, err := h.Write(plaintext); err != nil {
-		panic(err)
-	}
-
-	// encrypt the content
-	dst := buf[crypto.NonceSize:crypto.NonceSize] // encrypt in place
-
-	err := crypto.Encrypt(
-		dst, key, nonce,
-		plaintext, aad,
-	)
-	if err != nil {
-		return nil, "", err
-	}
-
-	digest := h.Sum(nil)
-	return buf, hex.EncodeToString(digest), err
 }
 
 // file addressing
