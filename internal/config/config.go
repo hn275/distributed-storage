@@ -36,9 +36,10 @@ type userYaml struct {
 }
 
 type ExperimentYaml struct {
-	Name        string `yaml:"name"`
-	Latency     uint32 `yaml:"interval"`
-	Homogeneous bool   `yaml:"bool"`
+	Name          string `yaml:"name"`
+	Latency       uint32 `yaml:"interval"`
+	Homogeneous   bool
+	OverheadParam int64 `yaml:"overhead-param"`
 }
 
 func NewConfig(configPath string) (*Config, error) {

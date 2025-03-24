@@ -18,4 +18,6 @@ load-balancer:
 experiment:
   name: test1
   latency: 10
-  homogeneous: true
+  homogeneous: false
+  # in nanoseconds
+  overhead-param: 1000
