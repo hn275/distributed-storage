@@ -48,7 +48,8 @@ func main() {
 	log.Printf("load balancing algorithm: %s\n", conf.Algorithm)
 
 	// telemetry
-	tel, err := telemetry.New("lb-"+expName+".csv", csvheaders)
+	filePath := "tmp/output/lb/cluster-" + expName + ".csv"
+	tel, err := telemetry.New(filePath, csvheaders)
 	if err != nil {
 		panic(err)
 	}
