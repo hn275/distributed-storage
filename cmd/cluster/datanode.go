@@ -196,7 +196,7 @@ func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) {
 	filePath := database.AccessCluster.Append(fileName).String()
 
 	// read + decrypt file
-	fileContent, err := os.ReadFile(filePath)
+	file, err := os.OpenFile(filePath, os.O_RDONLY, 0666)
 	if err != nil {
 		d.log.Error("failed to read file.",
 			"file-path", filePath)
@@ -204,32 +204,24 @@ func (d *dataNode) serveClient(soc net.Listener, userAddr net.Addr) {
 	}
 
 	var (
-		pubKey     []byte = fileBuf[32:]
-		secKey     []byte = crypto.DataNodeSecretKey[:]
-		dst        []byte = fileContent[crypto.NonceSize:crypto.NonceSize]
-		nonce      []byte = fileContent[:crypto.NonceSize]
-		ciphertext []byte = fileContent[crypto.NonceSize:]
+		pubKey []byte = fileBuf[32:]
+		secKey []byte = crypto.DataNodeSecretKey[:]
 	)
 
-	err = crypto.Decrypt(
-		dst, secKey, nonce,
-		ciphertext, pubKey,
-	)
-
+	s, err := crypto.NewFileStream(secKey, pubKey)
 	if err != nil {
-		d.log.Error("failed to decrypt content.",
+		d.log.Error("failed to initialize stream.",
 			"err", err,
 			"file", filePath)
 		return
 	}
 
-	// send it over the wire
-	plaintext := fileContent[crypto.NonceSize : len(fileContent)-crypto.TagSize]
-
-	n, err := user.Write(plaintext)
+	n, err := s.DecryptAndCopy(user, file)
 	if err != nil {
-		d.log.Error("failed to write to socket.",
-			"err", err)
+		d.log.Error("failed to decrypt content.",
+			"err", err,
+			"file", filePath)
+		return
 	}
 
 	collectEvent(d.id, eventFileTransfer, peerUser, ts, d.tel, uint64(n))
