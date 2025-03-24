@@ -36,7 +36,6 @@ var (
 	allClientTimeData []ClientTimeData
 
 	shutdownSignal = [...]byte{network.ShutdownSig}
-	userJoinSignal = [...]byte{network.UserNodeJoin}
 )
 
 func main() {
@@ -179,6 +178,15 @@ func runSim(fileHash string, wg *sync.WaitGroup, clientIdx int, interval uint32)
 func request(fileHash string, wg *sync.WaitGroup) (int64, error) {
 	defer wg.Done()
 
+	// open listener for data node
+	// open a new port for user to dial
+	soc, err := net.Listen(network.ProtoTcp4, network.RandomLocalPort)
+	if err != nil {
+		return 0, err
+	}
+
+	defer soc.Close()
+
 	// open socket to load balancer
 	lbConn, err := net.Dial(network.ProtoTcp4, lbNodeAddr)
 	if err != nil {
@@ -187,48 +195,32 @@ func request(fileHash string, wg *sync.WaitGroup) (int64, error) {
 
 	defer lbConn.Close()
 
-	if _, err := lbConn.Write(userJoinSignal[:]); err != nil {
+	ping := [16]byte{network.UserNodeJoin}
+	if err := network.AddrToBytes(soc.Addr(), ping[1:]); err != nil {
+		return 0, err
+	}
+
+	if _, err := lbConn.Write(ping[:]); err != nil {
 		return 0, fmt.Errorf("failed ping load balancer: %v", err)
 	}
+	lbConn.Close()
 
-	// slog.Info("connected to LB.", "remote_addr", lbConn.RemoteAddr())
-
-	// 64 bytes, 32 byte file hash, 32 byte pub key
-	if err := lbConn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
-		panic(err)
-	}
-
-	var buf [64]byte
-	n, err := lbConn.Read(buf[:])
+	// datanode connects
+	dataConn, err := soc.Accept()
 	if err != nil {
-		return 0, fmt.Errorf("failed receive message from load balancer: %v", err)
+		return 0, err
 	}
 
-	if n != 6 {
-		return 0, errors.New("protocol violation, expecting 6 bytes only.")
-	}
-
-	// dialing data node
-	dataNodeAddr, err := network.BytesToAddr(buf[:n])
-	if err != nil {
-		return 0, fmt.Errorf("invalid network address: %v", buf[:n])
-	}
-
-	dataConn, err := net.DialTCP(network.ProtoTcp4, nil, dataNodeAddr.(*net.TCPAddr))
-	if err != nil {
-		return 0, fmt.Errorf("failed to dail data node: %v", err)
-	}
-
-	/*
-		slog.Info(
-			"data node connected.",
-			"addr", dataConn.RemoteAddr(),
-			"protocol", dataConn.RemoteAddr().Network(),
-		)
-	*/
 	defer dataConn.Close()
 
+	err = dataConn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if err != nil {
+		return 0, err
+	}
+
 	// sending file name + pub key
+	// 64 bytes, 32 byte file hash, 32 byte pub key
+	var buf [64]byte
 	if _, err := hex.Decode(buf[:32], []byte(fileHash)); err != nil {
 		return 0, fmt.Errorf("invalid file hash: %s", fileHash)
 	}
@@ -254,14 +246,6 @@ func request(fileHash string, wg *sync.WaitGroup) (int64, error) {
 	if !byteEqual(digest, buf[:32]) {
 		return 0, errors.New("file integrity violation")
 	}
-
-	/*
-		slog.Info(
-			"file request completed.",
-			"file-hash", fileHash,
-			"file-size", humanize.Bytes(uint64(byteCopied)),
-		)
-	*/
 
 	return byteCopied, nil
 }
