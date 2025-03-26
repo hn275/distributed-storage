@@ -13,6 +13,7 @@ FILE_SZ = ("s", "m", "l")
 RATES = (10, 32, 100, 320, 1000)
 LATENCY_OPTIONS = (0, 100)
 USER_DIR = "tmp/output/user"
+LB_DIR = "tmp/output/lb"
 
 def write_random_numbers(filename="output.txt"):
     with open(filename, "w") as file:
@@ -33,6 +34,19 @@ class ClientExp:
     
     def __repr__(self):
         return f"ClientExp(alg={self.alg}, net_delay={self.net_delay}, homog={self.homog}, interval={self.interval}, fsz={self.fsz}, rate={self.rate}, avg_serv_time={self.avg_serv_time}"
+    
+class LBExp:
+    def __init__(self, alg, net_delay=None, homog=None, interval=None, fsz=None, rate=None, req_per_sec=None):
+        self.alg = alg
+        self.net_delay = net_delay
+        self.homog = homog
+        self.interval = interval
+        self.fsz = fsz
+        self.rate = rate
+        self.req_per_sec = req_per_sec
+    
+    def __repr__(self):
+        return f"LBExp(alg={self.alg}, net_delay={self.net_delay}, homog={self.homog}, interval={self.interval}, fsz={self.fsz}, rate={self.rate}, avg_serv_time={self.req_per_sec}"
 
 def gen_config(name, algo, homog, latency, interval, files):
     config = f"user:\n" + \
@@ -118,6 +132,57 @@ def get_client_exp( filename ):
 
     return ClientExp(alg, int(net_delay), homog, int(interval), fsz, int(sz), int(rate), total/length)
 
+
+def get_lb_exp( filename ):
+    pattern = re.compile(rf"{LB_DIR}/lb-exp-(rr|lc|lrt)-lat-(\d+)-homog-(true|false)-int-(\d+)-fsz-(s|m|l)-rate-(\d+)\.csv")
+    match = pattern.match(filename)
+    if not match:
+        print(f"Error: unable to match file {filename}")
+        return ClientExp("ERROR")
+
+    alg, net_delay, homog, interval, fsz, rate = match.groups()
+
+    try:
+        fd = open(filename, "r")
+    except:
+        print(f"Error attempting to open file {filename}")
+        sys.exit(1)
+
+    # Read the header
+    fd.readline()
+
+    total_req = 0
+    start_first_request = None
+    end_last_request = 0
+
+    # Save data in dict
+    for line in fd:
+        event, _, _, start_time, dur = line.split(",")
+        if event == "user-joined":
+            start_time = float(start_time)
+            end_time = start_time + float(dur)
+            if start_first_request == None:
+                start_first_request = start_time
+
+            if end_last_request < end_time:
+                end_last_request = end_time
+            
+            total_req += 1
+    
+    fd.close()
+
+    if (total_req == 0):
+        print(f'File {filename} had no entries with event-type user-joined')
+    
+    homog = True if homog == "true" else False
+
+    req_per_sec = 0
+    if (total_req > 0):
+        total_time = (end_last_request - start_first_request) / 1e9 # convert total time to seconds
+        req_per_sec = (total_req / total_time)
+
+    return LBExp(alg, int(net_delay), homog, int(interval), fsz, int(rate), req_per_sec)
+
 def generate_client_avg_time_vs_size(data, title, figure_name) -> None:
     # Save the plot in the plots dir
     save_dir = "plots"
@@ -142,14 +207,48 @@ def generate_client_avg_time_vs_size(data, title, figure_name) -> None:
 
     return
 
-def generate_client_experiment_records(files):
+def generate_lb_table_results(binned_data, output_file, bin_label):
+    save_dir = "lb_tables"
+    os.makedirs(save_dir, exist_ok=True)
+    
+    try:
+        fd = open(os.path.join(save_dir, output_file), "w")
+    except:
+        print(f"Error attempting to open file {dir}{output_file} for writing")
+        sys.exit(1)
+    
+    header = f"{bin_label},"
+    for i in range(len(RATES)):
+        header += str(RATES[i]) + "(req/sec)"
+        if i < len(RATES) -1:
+            header += ","
+    fd.write(f"{header}\n")
+
+    # Sort bins by request rate
+    {binned_data[b].sort(key=lambda lb: lb.rate) for b in binned_data}
+
+    # Fill in rows of the csv
+    for bucket in binned_data:
+        row = f"{bucket},"
+        for i in range(len(binned_data[bucket])):
+            row += str(binned_data[bucket][i].req_per_sec)
+            if i < len(binned_data[bucket]) - 1:
+                row += ","
+        fd.write(f"{row}\n")
+
+    fd.close()
+
+    
+
+
+def generate_experiment_records(files, item_generator):
     records = []
     for file in files:
-        records.append(get_client_exp(file))
+        records.append(item_generator(file))
     
     return records
 
-def filter_client_records(records, filter):
+def filter_records(records, filter):
     return [r for r in records if filter(r)]
 
 def get_filenames_from_dir(directory):
@@ -204,7 +303,7 @@ def bin_data_by_fsz(data):
 
 def generate_user_plots():
     files = get_filenames_from_dir(USER_DIR)
-    exp_records = generate_client_experiment_records(files)
+    exp_records = generate_experiment_records(files, get_client_exp)
 
     # Charts with Avg time on Y, Request Rate on X, Same file Size, Same Lat, Same Homog, All Algs
     for homog in HOMOG_OPTIONS:
@@ -214,7 +313,7 @@ def generate_user_plots():
                 title = f"Average Client Request Service Time for {get_file_size_string(sz)} Files with Various"
                 title += f"\nRequest Rates with {get_homog_string(homog)} Nodes and {get_latency_string(net_delay)}"
                 figure_name = f"algs-compare-homog-{homog}-fsz-{sz}-delay-{net_delay}"
-                filtered_records = filter_client_records(exp_records, filter)
+                filtered_records = filter_records(exp_records, filter)
                 binned_data = bin_data_by_alg(filtered_records)
                 # Each bin should have an entry for each rate in order for this to be a valid configuration
                 if all(len(binned_data[b]) == len(RATES) for b in binned_data):
@@ -227,23 +326,57 @@ def generate_user_plots():
                 filter = lambda r: r.homog == homog and r.alg == alg and r.net_delay == net_delay
                 title = f"{get_alg_string(alg)}: Service Time vs. Request Size"
                 figure_name = f"vary-fsz-alg-{alg}-homog-{homog}-delay-{net_delay}"
-                filtered_records = filter_client_records(exp_records, filter)
+                filtered_records = filter_records(exp_records, filter)
                 binned_data = bin_data_by_fsz(filtered_records)
                 # Each bin should have an entry for each rate in order for this to be a valid configuration
                 if all(len(binned_data[b]) == len(RATES) for b in binned_data):
                     generate_client_avg_time_vs_size(binned_data, title, figure_name)
 
 
+def generate_lb_data():
+    files = get_filenames_from_dir(LB_DIR)
+    exp_records =  generate_experiment_records(files, get_lb_exp)
+
+     # Tables with cols for alg, 10, 32, 100, 320, 1000 rate
+    for homog in HOMOG_OPTIONS:
+        for sz in FILE_SZ:
+            for net_delay in LATENCY_OPTIONS:
+                filter = lambda r: r.homog == homog and r.fsz == sz and r.net_delay == net_delay
+                output_file = f"algs-compare-homog-{homog}-fsz-{sz}-delay-{net_delay}.csv"
+                filtered_records = filter_records(exp_records, filter)
+                binned_data = bin_data_by_alg(filtered_records)
+                # Each bin should have an entry for each rate in order for this to be a valid configuration
+                if all(len(binned_data[b]) == len(RATES) for b in binned_data):
+                    generate_lb_table_results(binned_data, output_file, "Algorithm")
+    
+    # Tables with cols for file size, 10, 32, 100, 320, 1000 rate
+    for homog in HOMOG_OPTIONS:
+        for alg, _ in ALG_OPTIONS:
+            for net_delay in LATENCY_OPTIONS:
+                filter = lambda r: r.homog == homog and r.alg == alg and r.net_delay == net_delay
+                output_file = f"vary-fsz-alg-{alg}-homog-{homog}-delay-{net_delay}.csv"
+                filtered_records = filter_records(exp_records, filter)
+                binned_data = bin_data_by_fsz(filtered_records)
+                # Each bin should have an entry for each rate in order for this to be a valid configuration
+                if all(len(binned_data[b]) == len(RATES) for b in binned_data):
+                    generate_lb_table_results(binned_data, output_file, "File Size")
+        
+
+
+
+
 def main():
     if (len(sys.argv) != 2):
         print("Error: invalid number of command arguments")
-        print("Usage: `python3 gen_files.py <opt>` where <opt> can be one of `user` or `configs`")
+        print("Usage: `python3 gen_files.py <opt>` where <opt> can be one of `user`, `lb`, or `configs`")
         sys.exit(1)
     
     if sys.argv[1] == "user":
         generate_user_plots()
     elif sys.argv[1] == "configs":
         generate_configs()
+    elif sys.argv[1] == "lb":
+        generate_lb_data()
     else:
         print("Error: invalid option given")
         print("Usage: `python3 gen_files.py <opt>` where opt can be one of `user` or `configs`")
