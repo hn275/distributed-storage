@@ -10,7 +10,7 @@ ALG_OPTIONS = (("rr", "simple-round-robin"), ("lc", "least-connections"), ("lrt"
 HOMOG_OPTIONS = (True, False)
 INTERVAL = 10
 FILE_SZ = ("s", "m", "l")
-RATES = (10, 100, 1000)
+RATES = (10, 32, 100, 320, 1000)
 LATENCY_OPTIONS = (0, 100)
 USER_DIR = "tmp/output/user"
 
@@ -216,7 +216,8 @@ def generate_user_plots():
                 figure_name = f"algs-compare-homog-{homog}-fsz-{sz}-delay-{net_delay}"
                 filtered_records = filter_client_records(exp_records, filter)
                 binned_data = bin_data_by_alg(filtered_records)
-                if all(len(binned_data[b]) == 3 for b in binned_data):
+                # Each bin should have an entry for each rate in order for this to be a valid configuration
+                if all(len(binned_data[b]) == len(RATES) for b in binned_data):
                     generate_client_avg_time_vs_size(binned_data, title, figure_name)
     
     # Charts with Avg time on Y, Request Rate on X, Different File Sizes, Same Lat, Same Homog, Same Alg
@@ -228,7 +229,8 @@ def generate_user_plots():
                 figure_name = f"vary-fsz-alg-{alg}-homog-{homog}-delay-{net_delay}"
                 filtered_records = filter_client_records(exp_records, filter)
                 binned_data = bin_data_by_fsz(filtered_records)
-                if all(len(binned_data[b]) == 3 for b in binned_data):
+                # Each bin should have an entry for each rate in order for this to be a valid configuration
+                if all(len(binned_data[b]) == len(RATES) for b in binned_data):
                     generate_client_avg_time_vs_size(binned_data, title, figure_name)
 
 
