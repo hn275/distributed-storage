@@ -13,7 +13,7 @@ func EnvOrDefault(key string, defaultValue string) string {
 		return defaultValue
 	}
 
-	slog.Info("env set.", "key", key, "default", defaultValue)
+	slog.Info("env set.", "key", key, "value", v)
 	return v
 }
 
