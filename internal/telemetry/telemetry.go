@@ -38,8 +38,6 @@ func New(outFileName string, headers []string) (*Telemetry, error) {
 		return nil, err
 	}
 
-	slog.Info("output telemetry file opened.", "file", outFileName)
-
 	telChan := make(chan Record, 10)
 	endChan := make(chan struct{}, 10)
 

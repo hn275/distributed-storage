@@ -35,7 +35,6 @@ type dataNode struct {
 }
 
 func makeDataNode(c net.Conn, id uint16, tel *telemetry.Telemetry, overHeadparam int64) *dataNode {
-	logger := slog.Default().With("node-id", id)
 	dataNode := &dataNode{
 		Conn:          c,
 		id:            id,

@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	logger   *slog.Logger = slog.Default()
+	logger   *slog.Logger = internal.NewLogger("LB")
 	globConf *config.Config
 	lbSrv    *loadBalancer
 

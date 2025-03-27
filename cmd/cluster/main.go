@@ -11,7 +11,10 @@ import (
 	"github.com/hn275/distributed-storage/internal/telemetry"
 )
 
+var logger *slog.Logger
+
 func main() {
+	logger = internal.NewLogger("CLUSTER")
 
 	// reading in config
 	configPath := internal.EnvOrDefault("CONFIG_PATH", config.DefaultConfigPath)
@@ -36,7 +39,7 @@ func main() {
 	defer tel.Done()
 
 	// initialize cluster
-	slog.Info(
+	logger.Info(
 		"initializing cluster.",
 		"node-count", conf.Node,
 		"load-balancer-addr", lbNodeAddr,
@@ -56,7 +59,7 @@ func main() {
 
 			node, err := nodeInitialize(lbNodeAddr, nodeID, tel, overHeadParam)
 			if err != nil {
-				slog.Error(
+				logger.Error(
 					"failed to initialize a data node.",
 					"node-index", nodeID,
 					"err", err,

@@ -36,14 +36,17 @@ var (
 	allClientTimeData []ClientTimeData
 
 	shutdownSignal = [...]byte{network.ShutdownSig}
+	logger         *slog.Logger
 )
 
 func main() {
+	// initialize logger
+	logger = internal.NewLogger("USER")
 
 	flag.StringVar(&lbNodeAddr, "lbaddr", "127.0.0.1:8000", "address of the loadbalancer")
 	flag.Parse()
 
-	slog.Info("Load balancing address.", "lbaddr", lbNodeAddr)
+	logger.Info("Load balancing address.", "lbaddr", lbNodeAddr)
 
 	// load config
 	configPath := internal.EnvOrDefault("CONFIG_PATH", config.DefaultConfigPath)
@@ -73,7 +76,7 @@ func main() {
 
 	// requesting files
 	for fileName, freq := range files {
-		slog.Info("requesting file.", "file-name", fileName, "freq", freq)
+		logger.Info("requesting file.", "file-name", fileName, "freq", freq)
 		wg.Add(freq)
 		for i := 0; i < freq; i++ {
 			// pass in global count variable
@@ -108,7 +111,7 @@ func writeResultsToFile(filename string) {
 	dir := "tmp/output/user"
 
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		slog.Error("error creating directory",
+		logger.Error("error creating directory",
 			"err", err)
 		return
 	}
@@ -116,7 +119,7 @@ func writeResultsToFile(filename string) {
 	filePath := filepath.Join(dir, filename)
 	file, err := os.Create(filePath)
 	if err != nil {
-		slog.Error("error creating file",
+		logger.Error("error creating file",
 			"err", err)
 		return
 	}
@@ -138,7 +141,7 @@ func writeResultsToFile(filename string) {
 	w.WriteAll(records)
 
 	if err := w.Error(); err != nil {
-		slog.Error("error writing csv",
+		logger.Error("error writing csv",
 			"err", err)
 		return
 	}
@@ -153,9 +156,8 @@ func runSim(fileHash string, wg *sync.WaitGroup, clientIdx int, interval uint32)
 
 	fileSize, err := request(fileHash, wg)
 	if err != nil {
-		slog.Error(
+		logger.Error(
 			"failed to request file.",
-			"file-name", fileHash,
 			"err", err,
 		)
 		return
@@ -166,9 +168,8 @@ func runSim(fileHash string, wg *sync.WaitGroup, clientIdx int, interval uint32)
 	// Write time data to the global array for main thread to write to csv later
 	allClientTimeData[clientIdx] = ClientTimeData{duration: dur, size: fileSize}
 
-	slog.Info(
+	logger.Info(
 		"file request complete.",
-		"file-name", fileHash,
 		"file-size", humanize.Bytes(uint64(fileSize)),
 		"duration", dur,
 	)
@@ -230,8 +231,6 @@ func request(fileHash string, wg *sync.WaitGroup) (int64, error) {
 	if _, err := dataConn.Write(buf[:64]); err != nil {
 		return 0, fmt.Errorf("failed to write to datanode; %v", err)
 	}
-
-	// slog.Info("file name + pub key sent", "addr", dataConn.RemoteAddr())
 
 	// write responses to hasher
 	h := blake3.New(crypto.DigestSize, crypto.UserPublicKey[:])

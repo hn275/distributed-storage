@@ -65,8 +65,6 @@ func (d *dataNode) Less(other algo.QueueNode) bool {
 func makeDataNode(conn net.Conn, nodeID uint16) *dataNode {
 	wchan := make(chan []byte, 100)
 
-	logger := slog.Default().With("node-id", nodeID)
-
 	dataNode := &dataNode{
 		Conn:     conn,
 		wchan:    wchan,
