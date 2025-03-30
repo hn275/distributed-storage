@@ -9,7 +9,7 @@ import random
 ALG_OPTIONS = (("rr", "simple-round-robin"), ("lc", "least-connections"), ("lrt", "least-response-time"))
 HOMOG_OPTIONS = (True, False)
 INTERVAL = 10
-FILE_SZ = ("s", "m", "l")
+FILE_SZ = ("s", "m", "l", "v") # be sure that v is always the final element
 RATES = (10, 32, 100, 320, 1000)
 LATENCY_OPTIONS = (0, 100)
 USER_DIR = "tmp/output/user"
@@ -75,16 +75,34 @@ def get_requests(rate, interval, sz):
     amount = rate * interval
     return [amount * int(sz == "s"), amount * int(sz == "m"), amount * int(sz == "l")]
 
-def generate_configs():
+def generate_varying_amounts_per_rate():
+    amounts = {}
+    for rate in RATES:
+        amount = rate * INTERVAL
+        # make a bucket for each non "v" file size
+        amounts[rate] = [0 for _ in range(len(FILE_SZ) -1)]
+        random.seed(42) # use seed to ensure the same numbers are always generated
+        for _ in range(amount):
+            index = random.randint(0, len(FILE_SZ) -2) # generate a random index (that is not for "v")
+            amounts[rate][index] += 1
+
+    return amounts
+
+
+
+def generate_configs(opt):
+    varying_fsz_with_fixed_amount =  generate_varying_amounts_per_rate()
+
     for algo in ALG_OPTIONS:
         for latency in LATENCY_OPTIONS:
             for homog in HOMOG_OPTIONS:
                 for f_sz in FILE_SZ:
                     for rate in RATES: # requests/sec
-                        if ((latency == 0 and homog == True and f_sz == "m") or
-                              latency == 100 and homog == False and f_sz == "m"):
+                        if ((latency == 0 and homog == True and f_sz == "m" and opt == "configs1") or
+                            (latency == 100 and homog == False and f_sz != "v" and opt == "configs2")):
                             name = f"exp-{algo[0]}-lat-{latency}-homog-{str(homog).lower()}-int-{INTERVAL}-fsz-{f_sz}-rate-{rate}"
-                            config = gen_config(name, algo[1], homog, latency, INTERVAL, get_requests(rate, INTERVAL, f_sz))
+                            requests = varying_fsz_with_fixed_amount[rate] if f_sz == "v" else get_requests(rate, INTERVAL, f_sz)
+                            config = gen_config(name, algo[1], homog, latency, INTERVAL, requests)
                             fd = open(f"./config/{name}.yml", "w")
                             fd.write(config)
                             fd.close()
@@ -298,7 +316,8 @@ def bin_data_by_alg(data):
 def bin_data_by_fsz(data):
     bins = {"s": [], "m": [], "l": []}
     for r in data:
-        bins[r.fsz].append(r)
+        if r.fsz != "v":
+            bins[r.fsz].append(r)
     return bins
 
 def generate_user_plots():
@@ -368,18 +387,18 @@ def generate_lb_data():
 def main():
     if (len(sys.argv) != 2):
         print("Error: invalid number of command arguments")
-        print("Usage: `python3 gen_files.py <opt>` where <opt> can be one of `user`, `lb`, or `configs`")
+        print("Usage: `python3 gen_files.py <opt>` where <opt> can be one of `user`, `lb`, `configs1`, or `configs2`")
         sys.exit(1)
     
     if sys.argv[1] == "user":
         generate_user_plots()
-    elif sys.argv[1] == "configs":
-        generate_configs()
+    elif sys.argv[1] == "configs1" or sys.argv[1] == "configs2":
+        generate_configs(sys.argv[1])
     elif sys.argv[1] == "lb":
         generate_lb_data()
     else:
         print("Error: invalid option given")
-        print("Usage: `python3 gen_files.py <opt>` where opt can be one of `user` or `configs`")
+        print("Usage: `python3 gen_files.py <opt>` where opt can be one of `user`, `lb`, `configs1`, or `configs2`")
         sys.exit(1)
 
 
