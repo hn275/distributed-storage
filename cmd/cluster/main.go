@@ -45,13 +45,15 @@ func main() {
 	wg := new(sync.WaitGroup)
 	wg.Add(int(conf.Node))
 
+	const nsToMs = 1000000
+
 	for nodeID := uint16(0); nodeID < conf.Node; nodeID++ {
 		go func(wg *sync.WaitGroup, nodeIndex uint16) {
 			defer wg.Done()
 
 			overHeadParam := int64(0)
 			if !globConf.Experiment.Homogeneous {
-				overHeadParam = rand.Int63n(globConf.Experiment.OverheadParam)
+				overHeadParam = rand.Int63n(globConf.Experiment.OverheadParam) * nsToMs
 			}
 
 			node, err := nodeInitialize(lbNodeAddr, nodeID, tel, overHeadParam)
