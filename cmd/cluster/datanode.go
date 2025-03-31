@@ -86,7 +86,10 @@ func nodeInitialize(lbAddr string, nodeID uint16, t *telemetry.Telemetry, overHe
 	return dataNode, nil
 }
 
-func (d *dataNode) Listen() {
+func (d *dataNode) Listen(wg *sync.WaitGroup) {
+	defer wg.Done()
+	defer d.Close()
+
 	d.tel.Collect(&event{
 		nodeID:       d.id,
 		nodeOverhead: d.overHeadParam,
@@ -96,19 +99,6 @@ func (d *dataNode) Listen() {
 		duration:     0,
 		size:         0,
 	})
-
-	defer func() {
-		d.Close()
-		d.tel.Collect(&event{
-			nodeID:       d.id,
-			nodeOverhead: d.overHeadParam,
-			eventType:    eventNodeOffline,
-			peer:         "",
-			timestamp:    time.Now(),
-			duration:     0,
-			size:         0,
-		})
-	}()
 
 	d.log.Info(
 		"node online.",
@@ -122,6 +112,7 @@ func (d *dataNode) Listen() {
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				d.log.Info("load balancer disconnected.")
+				break
 			} else {
 				d.log.Error("failed to read from LB.",
 					"err", err)
@@ -144,6 +135,16 @@ func (d *dataNode) Listen() {
 
 		}
 	}
+
+	d.tel.Collect(&event{
+		nodeID:       d.id,
+		nodeOverhead: d.overHeadParam,
+		eventType:    eventNodeOffline,
+		peer:         "",
+		timestamp:    time.Now(),
+		duration:     0,
+		size:         0,
+	})
 }
 
 func (d *dataNode) handleUserJoin(buf []byte) error {

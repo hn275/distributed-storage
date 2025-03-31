@@ -49,7 +49,6 @@ func main() {
 
 	for nodeID := uint16(0); nodeID < conf.Node; nodeID++ {
 		go func(wg *sync.WaitGroup, nodeIndex uint16) {
-			defer wg.Done()
 
 			overHeadParam := int64(0)
 			if !globConf.Experiment.Homogeneous {
@@ -65,7 +64,7 @@ func main() {
 				)
 			}
 
-			node.Listen()
+			node.Listen(wg)
 		}(wg, nodeID)
 	}
 
