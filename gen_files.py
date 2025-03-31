@@ -11,9 +11,10 @@ HOMOG_OPTIONS = (True, False)
 INTERVAL = 10
 FILE_SZ = ("s", "m", "l", "v") # be sure that v is always the final element
 RATES = (10, 32, 100, 320, 1000)
-LATENCY_OPTIONS = (0, 100)
+LATENCY_OPTIONS = (0, 25)
 USER_DIR = "tmp/output/user"
 LB_DIR = "tmp/output/lb"
+CLUSTER_DIR = "tmp/output/cluster"
 DATANODE_COUNT = 20
 
 def write_random_numbers(filename="output.txt"):
@@ -23,7 +24,7 @@ def write_random_numbers(filename="output.txt"):
             file.write(f"{num},256\n")
 
 class ClientExp:
-    def __init__(self, alg, net_delay=None, homog=None, interval=None, fsz=None, fsz_bytes=None, rate=None, avg_serv_time=None):
+    def __init__(self, alg, net_delay=None, homog=None, interval=None, fsz=None, fsz_bytes=None, rate=None, avg_serv_time=None, errors=None):
         self.alg = alg
         self.net_delay = net_delay
         self.homog = homog
@@ -32,9 +33,10 @@ class ClientExp:
         self.fsz_bytes = fsz_bytes
         self.rate = rate
         self.avg_serv_time = avg_serv_time
+        self.errors = errors # errors as a percentages
     
     def __repr__(self):
-        return f"ClientExp(alg={self.alg}, net_delay={self.net_delay}, homog={self.homog}, interval={self.interval}, fsz={self.fsz}, rate={self.rate}, avg_serv_time={self.avg_serv_time}"
+        return f"ClientExp(alg={self.alg}, net_delay={self.net_delay}, homog={self.homog}, interval={self.interval}, fsz={self.fsz}, rate={self.rate}, avg_serv_time={self.avg_serv_time}, errors={self.errors}"
     
 class LBExp:
     def __init__(self, alg, net_delay=None, homog=None, interval=None, fsz=None, rate=None, req_per_sec=None):
@@ -129,7 +131,9 @@ def get_client_exp( filename ):
     fd.readline()
 
     total = 0
-    length = 0
+    length_no_errors = 0
+    errors = 0
+    full_length = 0
 
     # Save data in dict
     for line in fd:
@@ -137,19 +141,23 @@ def get_client_exp( filename ):
         dur = float(dur)
         sz = int(sz)
         if dur == 0 and sz == 0:
-            continue # skip failed requests
-        total += float(dur) / 1000
-        length += 1
+            errors += 1
+        
+        else:
+            total += float(dur) / 1000
+            length_no_errors += 1
+        
+        full_length += 1
     
     fd.close()
 
-    if (length == 0):
+    if (length_no_errors == 0):
         print(f'File {filename} had all zero entries')
         return ClientExp("ERROR")
     
     homog = True if homog == "true" else False
 
-    return ClientExp(alg, int(net_delay), homog, int(interval), fsz, int(sz), int(rate), total/length)
+    return ClientExp(alg, int(net_delay), homog, int(interval), fsz, int(sz), int(rate), total/length_no_errors, errors/full_length)
 
 
 def get_lb_exp( filename ):
@@ -321,6 +329,39 @@ def bin_data_by_fsz(data):
             bins[r.fsz].append(r)
     return bins
 
+def generate_client_errors(binned_data, output_file, bin_label):
+    save_dir = "client-errors"
+    os.makedirs(save_dir, exist_ok=True)
+
+    try:
+        fd = open(os.path.join(save_dir, output_file+".csv"), "w")
+    except:
+        print(f"Error attempting to open file {dir}{output_file} for writing")
+        sys.exit(1)
+
+    header = f"{bin_label},"
+    for i in range(len(RATES)):
+        header += str(RATES[i]) + "(req/sec)"
+        if i < len(RATES) -1:
+            header += ","
+    fd.write(f"{header}\n")
+
+    # Sort bins by request rate
+    {binned_data[b].sort(key=lambda c: c.rate) for b in binned_data}
+
+    # Fill in rows of the csv
+    for bucket in binned_data:
+        row = f"{bucket},"
+        for i in range(len(binned_data[bucket])):
+            row += str(binned_data[bucket][i].errors)
+            if i < len(binned_data[bucket]) - 1:
+                row += ","
+        fd.write(f"{row}\n")
+
+    fd.close()
+
+
+
 def generate_user_plots():
     files = get_filenames_from_dir(USER_DIR)
     exp_records = generate_experiment_records(files, get_client_exp)
@@ -338,6 +379,7 @@ def generate_user_plots():
                 # Each bin should have an entry for each rate in order for this to be a valid configuration
                 if all(len(binned_data[b]) == len(RATES) for b in binned_data):
                     generate_client_avg_time_vs_size(binned_data, title, figure_name)
+                    generate_client_errors(binned_data, figure_name, "Algorithm")
     
     # Charts with Avg time on Y, Request Rate on X, Different File Sizes, Same Lat, Same Homog, Same Alg
     for homog in HOMOG_OPTIONS:
@@ -351,6 +393,7 @@ def generate_user_plots():
                 # Each bin should have an entry for each rate in order for this to be a valid configuration
                 if all(len(binned_data[b]) == len(RATES) for b in binned_data):
                     generate_client_avg_time_vs_size(binned_data, title, figure_name)
+                    generate_client_errors(binned_data, figure_name, "File Size")
 
 
 def generate_lb_data():
@@ -382,13 +425,74 @@ def generate_lb_data():
                     generate_lb_table_results(binned_data, output_file, "File Size")
         
 
+def generate_requests_per_node():
+    files = get_filenames_from_dir(CLUSTER_DIR)
+
+    save_dir = "node-request-counts"
+    os.makedirs(save_dir, exist_ok=True)
+
+
+    for file in files:
+        pattern = re.compile(rf"{CLUSTER_DIR}/cluster-exp-(((?:rr|lc|lrt)-lat-(?:\d+)-homog-(?:true|false)-int-(?:\d+)-fsz-(?:s|m|l)-rate-(?:\d+))\.csv)")
+        match = pattern.match(file)
+
+        if match == None:
+            continue
+
+        output_file = match.groups()[0]
+        node_req_count = {}
+
+        try:
+            fd = open(file, "r")
+        except:
+            print(f"Error attempting to open file {CLUSTER_DIR}/{file} for reading")
+            sys.exit(1)
+        
+        # node-id,performance-overhead(ns),event-type,peer,timestamp,duration(ns),bytes-transferred
+        fd.readline() # header
+
+        # read all lines in file and gather node request counts
+        for line in fd:
+            id, _, event, _ = line.split(",", maxsplit= 3)
+            id = int(id)
+            if event == "file-transfer":
+                if id not in node_req_count:
+                    node_req_count[id] = 1
+                else:
+                    node_req_count[id] += 1
+
+        fd.close()
+
+        # write the results to output file
+        try:
+            fd = open(os.path.join(save_dir, "node-req-count-" + output_file), "w")
+        except:
+            print(f"Error attempting to open file {dir}/{output_file} for writing")
+            sys.exit(1)
+        
+        fd.write("node-id,count\n")
+        
+        sorted_ids = sorted(list(node_req_count.keys()))
+        values = []
+        for id in sorted_ids:
+            values.append(node_req_count[id])
+            fd.write(f"{id},{node_req_count[id]}\n")
+        fd.close()
+
+        plt.bar(sorted_ids, values, color='skyblue')
+        plt.xlabel('Node ID')
+        plt.ylabel('Number of Requests')   
+        plt.xticks(sorted_ids) 
+        plt.savefig(os.path.join(save_dir, "node-req-count-" +  match.groups()[1]), dpi=300, bbox_inches='tight')
+
+    return
 
 
 
 def main():
     if (len(sys.argv) != 2):
         print("Error: invalid number of command arguments")
-        print("Usage: `python3 gen_files.py <opt>` where <opt> can be one of `user`, `lb`, `configs1`, or `configs2`")
+        print("Usage: `python3 gen_files.py <opt>` where <opt> can be one of `user`, `lb`, `cluster`, `configs1`, or `configs2`")
         sys.exit(1)
     
     if sys.argv[1] == "user":
@@ -397,9 +501,11 @@ def main():
         generate_configs(sys.argv[1])
     elif sys.argv[1] == "lb":
         generate_lb_data()
+    elif sys.argv[1] == "cluster":
+        generate_requests_per_node()
     else:
         print("Error: invalid option given")
-        print("Usage: `python3 gen_files.py <opt>` where opt can be one of `user`, `lb`, `configs1`, or `configs2`")
+        print("Usage: `python3 gen_files.py <opt>` where opt can be one of `user`, `lb`, `cluster`, `configs1`, or `configs2`")
         sys.exit(1)
 
 
