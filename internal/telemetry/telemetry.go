@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"encoding/csv"
+	"log"
 	"log/slog"
 	"os"
 )
@@ -55,18 +56,16 @@ func (t *Telemetry) Collect(record Record) {
 }
 
 func (t *Telemetry) Done() {
-	t.endChan <- struct{}{}
-
 	t.writer.Flush()
 	if err := t.writer.Error(); err != nil {
-		panic(err)
+		log.Println(err)
 	}
-	t.fd.Close()
-
+	if err := t.fd.Close(); err != nil {
+		log.Println(err)
+	}
 }
 
 func (t *Telemetry) collect() {
-
 	for {
 		select {
 		case record := <-t.telChan:
