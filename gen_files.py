@@ -14,6 +14,7 @@ RATES = (10, 32, 100, 320, 1000)
 LATENCY_OPTIONS = (0, 100)
 USER_DIR = "tmp/output/user"
 LB_DIR = "tmp/output/lb"
+DATANODE_COUNT = 20
 
 def write_random_numbers(filename="output.txt"):
     with open(filename, "w") as file:
@@ -58,7 +59,7 @@ def gen_config(name, algo, homog, latency, interval, files):
              f"  interval: {interval}\n" + \
              f"\n" + \
              f"cluster:\n" + \
-             f"  node: 10\n" + \
+             f"  node: {DATANODE_COUNT}\n" + \
              f"\n" + \
              f"load-balancer:\n" + \
              f"  algo: {algo}\n" + \
@@ -98,7 +99,7 @@ def generate_configs(opt):
             for homog in HOMOG_OPTIONS:
                 for f_sz in FILE_SZ:
                     for rate in RATES: # requests/sec
-                        if ((latency == 0 and homog == True and f_sz == "m" and opt == "configs1") or
+                        if ((latency == 0 and homog == False and f_sz == "m" and opt == "configs1") or
                             (latency == 100 and homog == False and f_sz != "v" and opt == "configs2")):
                             name = f"exp-{algo[0]}-lat-{latency}-homog-{str(homog).lower()}-int-{INTERVAL}-fsz-{f_sz}-rate-{rate}"
                             requests = varying_fsz_with_fixed_amount[rate] if f_sz == "v" else get_requests(rate, INTERVAL, f_sz)
