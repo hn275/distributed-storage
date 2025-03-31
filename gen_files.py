@@ -431,7 +431,6 @@ def generate_requests_per_node():
     save_dir = "node-request-counts"
     os.makedirs(save_dir, exist_ok=True)
 
-
     for file in files:
         pattern = re.compile(rf"{CLUSTER_DIR}/cluster-exp-(((?:rr|lc|lrt)-lat-(?:\d+)-homog-(?:true|false)-int-(?:\d+)-fsz-(?:s|m|l)-rate-(?:\d+))\.csv)")
         match = pattern.match(file)
@@ -451,19 +450,19 @@ def generate_requests_per_node():
         # node-id,performance-overhead(ns),event-type,peer,timestamp,duration(ns),bytes-transferred
         fd.readline() # header
 
-        overheadMap = {}
+        overhead_map = {}
         # read all lines in file and gather node request counts
         for line in fd:
             if len(line.split(",")) > 3: 
-                id, foo, event, _ = line.split(",", maxsplit= 3)
-                foo = int(foo)
+                id, overhead, event, _ = line.split(",", maxsplit= 3)
+                overhead = int(overhead)
                 id = int(id)
-                overheadMap[id] = foo
                 if event == "file-transfer":
                     if id not in node_req_count:
                         node_req_count[id] = 1
                     else:
                         node_req_count[id] += 1
+                    overhead_map[id] = overhead
 
         fd.close()
 
@@ -480,7 +479,11 @@ def generate_requests_per_node():
         values = []
         for id in sorted_ids:
             values.append(node_req_count[id])
-            fd.write(f"{id},{node_req_count[id]},{overheadMap[id]}\n")
+        
+        sorted_overhead = sorted(list(overhead_map.items()), key = lambda tup: tup[1])
+        for (id, _) in sorted_overhead:
+            fd.write(f"{id},{node_req_count[id]},{overhead_map[id]}\n")
+        
         fd.close()
 
         plt.bar(sorted_ids, values, color='skyblue')
@@ -488,9 +491,9 @@ def generate_requests_per_node():
         plt.ylabel('Number of Requests')   
         plt.xticks(sorted_ids) 
         plt.savefig(os.path.join(save_dir, "node-req-count-" +  match.groups()[1]), dpi=300, bbox_inches='tight')
+        plt.close()
 
     return
-
 
 
 def main():
