@@ -451,15 +451,19 @@ def generate_requests_per_node():
         # node-id,performance-overhead(ns),event-type,peer,timestamp,duration(ns),bytes-transferred
         fd.readline() # header
 
+        overheadMap = {}
         # read all lines in file and gather node request counts
         for line in fd:
-            id, _, event, _ = line.split(",", maxsplit= 3)
-            id = int(id)
-            if event == "file-transfer":
-                if id not in node_req_count:
-                    node_req_count[id] = 1
-                else:
-                    node_req_count[id] += 1
+            if len(line.split(",")) > 3: 
+                id, foo, event, _ = line.split(",", maxsplit= 3)
+                foo = int(foo)
+                id = int(id)
+                overheadMap[id] = foo
+                if event == "file-transfer":
+                    if id not in node_req_count:
+                        node_req_count[id] = 1
+                    else:
+                        node_req_count[id] += 1
 
         fd.close()
 
@@ -470,13 +474,13 @@ def generate_requests_per_node():
             print(f"Error attempting to open file {dir}/{output_file} for writing")
             sys.exit(1)
         
-        fd.write("node-id,count\n")
+        fd.write("node-id,count,overhead\n")
         
         sorted_ids = sorted(list(node_req_count.keys()))
         values = []
         for id in sorted_ids:
             values.append(node_req_count[id])
-            fd.write(f"{id},{node_req_count[id]}\n")
+            fd.write(f"{id},{node_req_count[id]},{overheadMap[id]}\n")
         fd.close()
 
         plt.bar(sorted_ids, values, color='skyblue')
