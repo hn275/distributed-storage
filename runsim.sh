@@ -23,7 +23,7 @@ runsim() {
 	[[ -z $pid ]] || kill -9 $(lsof -t -i:8000)
 
 	export CONFIG_PATH=$1
-	sleep 3
+	echo "Running simulation: $1"
 	./tmp/loadbalance &
 	sleep 1
 	./tmp/cluster &
@@ -33,7 +33,6 @@ runsim() {
 
 for file in ./config/*; do
 	if [ -f "$file" ]; then
-		echo "Running simulation: $file"
 		runsim $file
 	fi
 done
