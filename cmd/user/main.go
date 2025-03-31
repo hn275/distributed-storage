@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/hex"
 	"errors"
@@ -24,6 +25,8 @@ import (
 	"github.com/hn275/distributed-storage/internal/network"
 	"lukechampine.com/blake3"
 )
+
+const readDeadLine = 5 * time.Second
 
 // can put the struct here.
 type ClientTimeData struct {
@@ -145,38 +148,66 @@ func writeResultsToFile(filename string) {
 }
 
 func runSim(fileHash string, wg *sync.WaitGroup, clientIdx int, interval uint32) {
+	defer wg.Done()
+
 	// sleep for a random number of seconds in [0, interval]
 	sleepDuration := time.Duration(rand.Float32()*float32(interval)) * time.Second
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
 	time.Sleep(sleepDuration)
 
-	start := time.Now()
+	type Result struct {
+		tele ClientTimeData
+		err  error
+	}
 
-	fileSize, err := request(fileHash, wg)
-	if err != nil {
-		slog.Error(
-			"failed to request file.",
-			"file-name", fileHash,
-			"err", err,
-		)
+	resultChan := make(chan Result, 10)
+
+	go func() {
+		start := time.Now()
+
+		fileSize, err := request(fileHash)
+		if err != nil {
+			resultChan <- Result{
+				err: err,
+			}
+			return
+		}
+
+		// Caputure request time for this client
+		dur := time.Since(start)
+		// Write time data to the global array for main thread to write to csv later
+		resultChan <- Result{
+			tele: ClientTimeData{duration: dur, size: fileSize},
+			err:  nil,
+		}
+	}()
+
+	select {
+	case record := <-resultChan:
+		if record.err != nil {
+			slog.Error("request failed.",
+				"file-hash", fileHash,
+				"err", record.err)
+		} else {
+			allClientTimeData[clientIdx] = record.tele
+			slog.Info("file request.",
+				"file-size", humanize.Bytes(uint64(record.tele.size)),
+				"dur", record.tele.duration)
+		}
+
+	case <-ctx.Done():
+		allClientTimeData[clientIdx] = ClientTimeData{0, 0}
+		slog.Error("request timed out.")
 		return
 	}
 
-	// Caputure request time for this client
-	dur := time.Since(start)
-	// Write time data to the global array for main thread to write to csv later
-	allClientTimeData[clientIdx] = ClientTimeData{duration: dur, size: fileSize}
-
-	slog.Info(
-		"file request complete.",
-		"file-name", fileHash,
-		"file-size", humanize.Bytes(uint64(fileSize)),
-		"duration", dur,
-	)
 }
 
 // request the file, returns (file size, error)
-func request(fileHash string, wg *sync.WaitGroup) (int64, error) {
-	defer wg.Done()
+func request(fileHash string) (int64, error) {
 
 	// open listener for data node
 	// open a new port for user to dial
@@ -213,10 +244,12 @@ func request(fileHash string, wg *sync.WaitGroup) (int64, error) {
 
 	defer dataConn.Close()
 
-	err = dataConn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	if err != nil {
-		return 0, err
-	}
+	/*
+		err = dataConn.SetReadDeadline(time.Now().Add(readDeadLine))
+		if err != nil {
+			return 0, err
+		}
+	*/
 
 	// sending file name + pub key
 	// 64 bytes, 32 byte file hash, 32 byte pub key
