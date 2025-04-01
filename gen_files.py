@@ -212,7 +212,7 @@ def get_lb_exp( filename ):
 
 def generate_client_avg_time_vs_size(data, title, figure_name) -> None:
     # Save the plot in the plots dir
-    save_dir = "plots"
+    save_dir = "tmp/output/plots"
     os.makedirs(save_dir, exist_ok=True)
 
     # Sort bins by request rate
@@ -330,7 +330,7 @@ def bin_data_by_fsz(data):
     return bins
 
 def generate_client_errors(binned_data, output_file, bin_label):
-    save_dir = "client-errors"
+    save_dir = "tmp/output/client-errors"
     os.makedirs(save_dir, exist_ok=True)
 
     try:
@@ -428,7 +428,7 @@ def generate_lb_data():
 def generate_requests_per_node():
     files = get_filenames_from_dir(CLUSTER_DIR)
 
-    save_dir = "node-request-counts"
+    save_dir = "tmp/output/node-request-counts"
     os.makedirs(save_dir, exist_ok=True)
 
     for file in files:
