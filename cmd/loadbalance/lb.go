@@ -146,7 +146,6 @@ func (lb *loadBalancer) userJoinHandler(user net.Conn, buf []byte) error {
 
 	// port fowarding
 	nodeQ.write(buf[:])
-	cxMap.setClient(user) // TODO: may not need this
 
 	lb.engine.PutNode(nodeQ)
 
