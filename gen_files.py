@@ -11,7 +11,7 @@ HOMOG_OPTIONS = (True, False)
 INTERVAL = 10
 FILE_SZ = ("s", "m", "l", "v") # be sure that v is always the final element
 RATES = (10, 32, 100, 320, 1000)
-LATENCY_OPTIONS = (0, 25)
+LATENCY_OPTIONS = (0, 100)
 USER_DIR = "tmp/output/user"
 LB_DIR = "tmp/output/lb"
 CLUSTER_DIR = "tmp/output/cluster"
@@ -102,7 +102,7 @@ def generate_configs(opt):
                 for f_sz in FILE_SZ:
                     for rate in RATES: # requests/sec
                         if ((latency == 0 and homog == False and f_sz == "m" and opt == "configs1") or
-                            (latency == 100 and homog == False and f_sz != "v" and opt == "configs2")):
+                            (latency == 100 and homog == False and f_sz == "v" and opt == "configs2")):
                             name = f"exp-{algo[0]}-lat-{latency}-homog-{str(homog).lower()}-int-{INTERVAL}-fsz-{f_sz}-rate-{rate}"
                             requests = varying_fsz_with_fixed_amount[rate] if f_sz == "v" else get_requests(rate, INTERVAL, f_sz)
                             config = gen_config(name, algo[1], homog, latency, INTERVAL, requests)
@@ -112,7 +112,7 @@ def generate_configs(opt):
     return
 
 def get_client_exp( filename ):
-    pattern = re.compile(rf"{USER_DIR}/client-exp-(rr|lc|lrt)-lat-(\d+)-homog-(true|false)-int-(\d+)-fsz-(s|m|l)-rate-(\d+)\.csv")
+    pattern = re.compile(rf"{USER_DIR}/client-exp-(rr|lc|lrt)-lat-(\d+)-homog-(true|false)-int-(\d+)-fsz-(s|m|l|v)-rate-(\d+)\.csv")
     match = pattern.match(filename)
     if not match:
         print(f"Error: unable to match file {filename}")
@@ -161,7 +161,7 @@ def get_client_exp( filename ):
 
 
 def get_lb_exp( filename ):
-    pattern = re.compile(rf"{LB_DIR}/lb-exp-(rr|lc|lrt)-lat-(\d+)-homog-(true|false)-int-(\d+)-fsz-(s|m|l)-rate-(\d+)\.csv")
+    pattern = re.compile(rf"{LB_DIR}/lb-exp-(rr|lc|lrt)-lat-(\d+)-homog-(true|false)-int-(\d+)-fsz-(s|m|l|v)-rate-(\d+)\.csv")
     match = pattern.match(filename)
     if not match:
         print(f"Error: unable to match file {filename}")
@@ -432,7 +432,8 @@ def generate_requests_per_node():
     os.makedirs(save_dir, exist_ok=True)
 
     for file in files:
-        pattern = re.compile(rf"{CLUSTER_DIR}/cluster-exp-(((?:rr|lc|lrt)-lat-(?:\d+)-homog-(?:true|false)-int-(?:\d+)-fsz-(?:s|m|l)-rate-(?:\d+))\.csv)")
+        print(f"Processing file: {file}")
+        pattern = re.compile(rf"{CLUSTER_DIR}/cluster-exp-(((?:rr|lc|lrt)-lat-(?:\d+)-homog-(?:true|false)-int-(?:\d+)-fsz-(?:s|m|l|v)-rate-(?:\d+))\.csv)")
         match = pattern.match(file)
 
         if match == None:
@@ -453,16 +454,15 @@ def generate_requests_per_node():
         overhead_map = {}
         # read all lines in file and gather node request counts
         for line in fd:
-            if len(line.split(",")) > 3: 
-                id, overhead, event, _ = line.split(",", maxsplit= 3)
-                overhead = int(overhead)
-                id = int(id)
-                if event == "file-transfer":
-                    if id not in node_req_count:
-                        node_req_count[id] = 1
-                    else:
-                        node_req_count[id] += 1
-                    overhead_map[id] = overhead
+            id, overhead, event, _ = line.split(",", maxsplit= 3)
+            # overhead = int(overhead)
+            id = int(id)
+            if event == "file-transfer":
+                if id not in node_req_count:
+                    node_req_count[id] = 1
+                else:
+                    node_req_count[id] += 1
+                overhead_map[id] = overhead
 
         fd.close()
 
