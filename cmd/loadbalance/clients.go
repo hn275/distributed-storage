@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"sync"
 	"time"
@@ -39,21 +40,31 @@ type dataNode struct {
 	index    int
 }
 
+// for debugging
+func (d *dataNode) String() string {
+	return fmt.Sprintf("[%d\t%f\t%d]", d.id, d.avgRT, d.requests)
+}
+
 // SetIndex implements algo.QueueNode.
 func (d *dataNode) SetIndex(i int) {
 	d.index = i
 }
 
 func (d *dataNode) Less(other algo.QueueNode) bool {
+	o := other.(*dataNode)
+
 	switch globConf.LoadBalancer.Algorithm {
 	case algo.AlgoSimpleRoundRobin:
 		return false // nop
 
 	case algo.AlgoLeastResponseTime:
-		return d.avgRT < other.(*dataNode).avgRT
+		if math.Abs(d.avgRT-o.avgRT) < math.SmallestNonzeroFloat64 {
+			return d.requests < o.requests
+		}
+		return d.avgRT < o.avgRT
 
 	case algo.AlgoLeastConnections:
-		return d.requests < other.(*dataNode).requests
+		return d.requests < o.requests
 
 	default:
 		panic(fmt.Sprintf("not implemented [%s].", globConf.LoadBalancer.Algorithm))
