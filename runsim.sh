@@ -24,15 +24,31 @@ runsim() {
 
 	export CONFIG_PATH=$1
 	echo "Running simulation: $1"
-	./tmp/loadbalance &
+	./tmp/loadbalance >$lblogfile 2>&1 &
 	sleep 1
-	./tmp/cluster &
+	./tmp/cluster >$clusterlogfile 2>&1 &
 	sleep 1
-	./tmp/user
+	./tmp/user |& tee $userlogfile
+	sleep 1
 }
 
-for file in ./config/*; do
-	if [ -f "$file" ]; then
-		runsim $file
-	fi
-done
+file=$1
+
+if [[ -z $file ]]; then
+	echo "Running all files in ./config/"
+
+	for file in ./config/*; do
+		if [ -f "$file" ]; then
+			runsim $file
+		fi
+	done
+else
+	runsim $file
+fi
+
+echo "Generating plot: user"
+./gen_files.py user
+echo "Generating plot: cluster"
+./gen_files.py cluster
+echo "Generating plot: lb"
+./gen_files.py lb
