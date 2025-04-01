@@ -122,7 +122,10 @@ func (d *dataNode) Listen(wg *sync.WaitGroup) {
 
 		switch buf[0] {
 		case network.UserNodeJoin:
+			wg.Add(1)
 			go func() {
+				defer wg.Done()
+
 				if err := d.handleUserJoin(buf); err != nil {
 					d.log.Error("failed to service UserNodeJoin",
 						"err", err)
