@@ -106,9 +106,11 @@ def generate_configs(opt):
                             name = f"exp-{algo[0]}-lat-{latency}-homog-{str(homog).lower()}-int-{INTERVAL}-fsz-{f_sz}-rate-{rate}"
                             requests = varying_fsz_with_fixed_amount[rate] if f_sz == "v" else get_requests(rate, INTERVAL, f_sz)
                             config = gen_config(name, algo[1], homog, latency, INTERVAL, requests)
-                            fd = open(f"./config/{name}.yml", "w")
+                            config_path = f"./config/{name}.yml"
+                            fd = open(config_path, "w")
                             fd.write(config)
                             fd.close()
+                            print(f"Config generated: {config_path}")
     return
 
 def get_client_exp( filename ):
@@ -380,6 +382,7 @@ def generate_user_plots():
                 if all(len(binned_data[b]) == len(RATES) for b in binned_data):
                     generate_client_avg_time_vs_size(binned_data, title, figure_name)
                     generate_client_errors(binned_data, figure_name, "Algorithm")
+                    print(f"Plot generated: {figure_name}")
     
     # Charts with Avg time on Y, Request Rate on X, Different File Sizes, Same Lat, Same Homog, Same Alg
     for homog in HOMOG_OPTIONS:
@@ -394,6 +397,7 @@ def generate_user_plots():
                 if all(len(binned_data[b]) == len(RATES) for b in binned_data):
                     generate_client_avg_time_vs_size(binned_data, title, figure_name)
                     generate_client_errors(binned_data, figure_name, "File Size")
+                    print(f"Plot generated: {figure_name}")
 
 
 def generate_lb_data():
@@ -432,7 +436,6 @@ def generate_requests_per_node():
     os.makedirs(save_dir, exist_ok=True)
 
     for file in files:
-        print(f"Processing file: {file}")
         pattern = re.compile(rf"{CLUSTER_DIR}/cluster-exp-(((?:rr|lc|lrt)-lat-(?:\d+)-homog-(?:true|false)-int-(?:\d+)-fsz-(?:s|m|l|v)-rate-(?:\d+))\.csv)")
         match = pattern.match(file)
 
@@ -486,13 +489,16 @@ def generate_requests_per_node():
         
         fd.close()
 
+        figure_name = os.path.join(save_dir, "node-req-count-" +  match.groups()[1])
+
         plt.bar(sorted_ids, values, color='skyblue')
         plt.xlabel('Node ID')
         plt.ylabel('Number of Requests')   
         plt.xticks(sorted_ids) 
-        plt.savefig(os.path.join(save_dir, "node-req-count-" +  match.groups()[1]), dpi=300, bbox_inches='tight')
+        plt.savefig(figure_name, dpi=300, bbox_inches='tight')
         plt.close()
 
+        print(f"Output generated: {figure_name}")
     return
 
 
