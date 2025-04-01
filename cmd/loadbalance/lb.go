@@ -24,7 +24,7 @@ const (
 )
 
 var csvheaders = []string{
-	"event-type", "peer", "node-id", "timestamp", "duration(ns)",
+	"event-type", "peer", "node-id", "timestamp", "duration(ns)", "avgRT",
 }
 
 type event struct {
@@ -33,6 +33,7 @@ type event struct {
 	peerID    int32
 	timestamp time.Time
 	duration  int64
+	avgRT     float64
 }
 
 func (e *event) Row() []string {
@@ -42,6 +43,7 @@ func (e *event) Row() []string {
 		fmt.Sprintf("%d", e.peerID),
 		fmt.Sprintf("%d", e.timestamp.UnixNano()),
 		fmt.Sprintf("%d", e.duration),
+		fmt.Sprintf("%f", e.avgRT),
 	}
 }
 
@@ -154,7 +156,9 @@ func (lb *loadBalancer) userJoinHandler(user net.Conn, buf []byte) error {
 		peerID:    int32(nodeQ.id),
 		timestamp: ts,
 		duration:  time.Since(ts).Nanoseconds(),
+		avgRT:     nodeQ.avgRT,
 	})
+
 	return err
 }
 
@@ -178,6 +182,8 @@ func (lb *loadBalancer) nodeJoinHandler(node net.Conn, msg []byte) error {
 		peerID:    int32(nodeId),
 		timestamp: ts,
 		duration:  time.Since(ts).Nanoseconds(),
+		avgRT:     dataNode.avgRT,
 	})
+
 	return nil
 }
