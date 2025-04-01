@@ -24,7 +24,7 @@ const (
 )
 
 var csvheaders = []string{
-	"event-type", "peer", "node-id", "timestamp", "duration(ns)", "avgRT",
+	"event-type", "peer", "node-id", "timestamp", "duration(ns)", "avgRT(ns)",
 }
 
 type event struct {

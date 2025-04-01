@@ -30,7 +30,7 @@ var eventHeaders = []string{
 	"timestamp",
 	"duration(ns)",
 	"bytes-transferred",
-	"avgRT",
+	"avgRT(ns)",
 }
 
 // telemetry
