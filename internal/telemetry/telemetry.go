@@ -5,6 +5,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"sync"
 )
 
 type EventType string
@@ -14,10 +15,9 @@ type Record interface {
 }
 
 type Telemetry struct {
-	fd      *os.File
-	writer  *csv.Writer
-	telChan chan Record
-	endChan chan struct{}
+	fd     *os.File
+	writer *csv.Writer
+	mtx    *sync.Mutex
 }
 
 func init() {
@@ -41,18 +41,17 @@ func New(outFileName string, headers []string) (*Telemetry, error) {
 
 	slog.Info("output telemetry file opened.", "file", outFileName)
 
-	telChan := make(chan Record, 10)
-	endChan := make(chan struct{}, 10)
-
-	tel := &Telemetry{fd, writer, telChan, endChan}
-
-	go tel.collect()
+	tel := &Telemetry{fd, writer, new(sync.Mutex)}
 
 	return tel, nil
 }
 
 func (t *Telemetry) Collect(record Record) {
-	t.telChan <- record
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+	if err := t.writer.Write(record.Row()); err != nil {
+		panic(err)
+	}
 }
 
 func (t *Telemetry) Done() {
@@ -62,19 +61,5 @@ func (t *Telemetry) Done() {
 	}
 	if err := t.fd.Close(); err != nil {
 		log.Println(err)
-	}
-}
-
-func (t *Telemetry) collect() {
-	for {
-		select {
-		case record := <-t.telChan:
-			if err := t.writer.Write(record.Row()); err != nil {
-				slog.Error("failed telemetry write", "err", err)
-			}
-
-		case <-t.endChan:
-			return
-		}
 	}
 }
