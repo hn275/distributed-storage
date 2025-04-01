@@ -14,8 +14,6 @@ import (
 	"github.com/hn275/distributed-storage/internal/network"
 )
 
-var cxMap = new(clientMap)
-
 type clientMap struct{ sync.Map }
 
 func (cx *clientMap) setClient(userConn net.Conn) {
@@ -111,8 +109,6 @@ func (d *dataNode) listen() {
 		}
 
 		switch buf[0] {
-		case network.PortForwarding:
-			go d.handlePortForward(buf)
 
 		case network.HealthCheck:
 			go d.handleHealthCheck(buf)
@@ -154,33 +150,4 @@ func (d *dataNode) handleHealthCheck(buf []byte) {
 		duration:  time.Since(ts).Nanoseconds(),
 		avgRT:     d.avgRT,
 	})
-}
-
-func (dn *dataNode) handlePortForward(buf []byte) {
-	if len(buf) < 13 {
-		panic("handlePortForward insufficient buf size")
-	}
-
-	clientAddr, err := network.BytesToAddr(buf[1:7])
-	if err != nil {
-		dn.log.Error("failed to marshal address bytes.")
-		return
-	}
-
-	client, ok := cxMap.getClient(clientAddr)
-	if !ok {
-		dn.log.Error("client not found in map.", "client", clientAddr)
-		return
-	}
-
-	defer client.Close()
-
-	if _, err := client.Write(buf[7:13]); err != nil {
-		dn.log.Error("address forwarding failed.",
-			"client", client.RemoteAddr(),
-			"err", err)
-	} else {
-		dn.log.Info("address forwarded to client.",
-			"client", client.RemoteAddr())
-	}
 }
