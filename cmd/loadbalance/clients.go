@@ -128,16 +128,7 @@ func (d *dataNode) handleHealthCheck(buf []byte) {
 	lbSrv.lock.Lock()
 
 	ts := time.Now()
-	defer func() {
-		lbSrv.lock.Unlock()
-		lbSrv.tel.Collect(&event{
-			eType:     eventHealthCheck,
-			peer:      peerDataNode,
-			peerID:    int32(d.id),
-			timestamp: ts,
-			duration:  time.Since(ts).Nanoseconds(),
-		})
-	}()
+	defer lbSrv.lock.Unlock()
 
 	// data node sends a health check message when it's done serving the client.
 	// so the active requests is reduced by 1.
@@ -154,6 +145,15 @@ func (d *dataNode) handleHealthCheck(buf []byte) {
 		d.log.Error("failed priority queue fixes.", "err", err)
 		return
 	}
+
+	lbSrv.tel.Collect(&event{
+		eType:     eventHealthCheck,
+		peer:      peerDataNode,
+		peerID:    int32(d.id),
+		timestamp: ts,
+		duration:  time.Since(ts).Nanoseconds(),
+		avgRT:     d.avgRT,
+	})
 }
 
 func (dn *dataNode) handlePortForward(buf []byte) {

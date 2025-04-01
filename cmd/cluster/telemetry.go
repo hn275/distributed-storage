@@ -30,6 +30,7 @@ var eventHeaders = []string{
 	"timestamp",
 	"duration(ns)",
 	"bytes-transferred",
+	"avgRT",
 }
 
 // telemetry
@@ -41,6 +42,7 @@ type event struct {
 	timestamp    time.Time
 	duration     uint64 // in nanoseconds
 	size         uint64 // in bytes
+	avgRT        float64
 }
 
 // Row implements telemetry.Record.
@@ -53,5 +55,6 @@ func (e *event) Row() []string {
 		fmt.Sprintf("%d", e.timestamp.UnixNano()),
 		fmt.Sprintf("%d", e.duration),
 		humanize.Bytes(e.size),
+		fmt.Sprintf("%f", e.avgRT),
 	}
 }

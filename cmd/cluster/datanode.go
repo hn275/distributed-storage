@@ -37,14 +37,16 @@ type dataNode struct {
 func makeDataNode(c net.Conn, id uint16, tel *telemetry.Telemetry, overHeadparam int64) *dataNode {
 	logger := slog.Default().With("node-id", id)
 	dataNode := &dataNode{
-		Conn:          c,
+		Conn: c,
+
 		id:            id,
 		avgRT:         0.0,
 		requests:      0,
 		overHeadParam: overHeadparam,
-		log:           logger,
-		tel:           tel,
-		mtx:           new(sync.Mutex),
+
+		log: logger,
+		tel: tel,
+		mtx: new(sync.Mutex),
 	}
 
 	return dataNode
@@ -98,6 +100,7 @@ func (d *dataNode) Listen(wg *sync.WaitGroup) {
 		timestamp:    time.Now(),
 		duration:     0,
 		size:         0,
+		avgRT:        d.avgRT,
 	})
 
 	d.log.Info(
@@ -147,6 +150,7 @@ func (d *dataNode) Listen(wg *sync.WaitGroup) {
 		timestamp:    time.Now(),
 		duration:     0,
 		size:         0,
+		avgRT:        d.avgRT,
 	})
 }
 
@@ -215,6 +219,7 @@ func (d *dataNode) handleUserJoin(buf []byte) error {
 		timestamp:    ts,
 		duration:     uint64(time.Since(ts).Nanoseconds()),
 		size:         uint64(n),
+		avgRT:        d.avgRT,
 	})
 
 	return nil
@@ -250,5 +255,6 @@ func (d *dataNode) healthCheckReport(srvStartTime *time.Time) {
 		timestamp:    ts,
 		duration:     uint64(time.Since(ts).Nanoseconds()),
 		size:         uint64(n),
+		avgRT:        d.avgRT,
 	})
 }
