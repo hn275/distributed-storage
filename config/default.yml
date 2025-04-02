@@ -1,11 +1,11 @@
 user:
-  x-small: 100
-  small: 20
-  medium: 10
-  large: 10
-  x-large: 1
-  xx-large: 1
-  interval: 10
+  x-small: 1
+  small: 0
+  medium: 0
+  large: 0
+  x-large: 0
+  xx-large: 0
+  interval: 0
 
 cluster:
   node: 10
