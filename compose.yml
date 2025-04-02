@@ -1,0 +1,33 @@
+services:
+  loadbalance:
+    container_name: csc466
+    networks:
+      - ds
+    build:
+      context: .
+      dockerfile: ./dockerfiles/Dockerfile
+    cap_add:
+      - NET_ADMIN
+    entrypoint: >
+      sh -c "
+        if [ ! -z "${LATENCY}" ]; then
+          apt-get update && apt-get install -y iproute2
+          tc qdisc add dev lo root netem delay "${LATENCY}ms"
+        fi
+        ./runsim.sh
+      "
+    deploy:
+      resources:
+        limits:
+          cpus: "0"
+          memory: 0G
+        reservations:
+          cpus: "0"
+          memory: 0G
+    volumes:
+      - ./output:/go/tmp/
+
+networks:
+  ds:
+    driver: bridge
+    name: ds
