@@ -129,7 +129,49 @@ func main() {
 	slog.Info("End of simulation")
 }
 
-func runSim(fileHash string, wg *sync.WaitGroup, clientIdx int, interval uint32, tel *telemetry.Telemetry) {
+func writeResultsToFile(filename string) {
+	dir := "tmp/output/user"
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		slog.Error("error creating directory",
+			"err", err)
+		return
+	}
+
+	filePath := filepath.Join(dir, filename)
+	file, err := os.Create(filePath)
+	if err != nil {
+		slog.Error("error creating file",
+			"err", err)
+		return
+	}
+	defer file.Close()
+
+	records := [][]string{
+		{"duration", "size"},
+	}
+
+	for _, data := range allClientTimeData {
+		row := []string{
+			strconv.FormatInt(data.duration.Milliseconds(), 10),
+			strconv.FormatInt(data.size, 10),
+		}
+		records = append(records, row)
+	}
+
+	w := csv.NewWriter(file)
+	w.WriteAll(records)
+
+	if err := w.Error(); err != nil {
+		slog.Error("error writing csv",
+			"err", err)
+		return
+	}
+
+	slog.Info("End of simulation")
+}
+
+func runSim(fileHash string, wg *sync.WaitGroup, clientIdx int, interval uint32) {
 	defer wg.Done()
 
 	// sleep for a random number of seconds in [0, interval]
