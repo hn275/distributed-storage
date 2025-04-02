@@ -1,36 +1,52 @@
 #!/usr/bin/bash
 
+log_dir=tmp/log
+bin_dir=tmp/bin
+
+runsim() {
+	log_lb="${log_dir}/lb/lb-$(basename "$1" .yml).log"
+	log_cluster="${log_dir}/cluster/cluster-$(basename "$1" .yml).log"
+	log_user="${log_dir}/user/user-$(basename "$1" .yml).log"
+
+	export CONFIG_PATH=$1
+
+	echo "Running simulation: $1"
+
+	echo "Starting lb"
+	${bin_dir}/loadbalance >$log_lb 2>&1 &
+	pid_lb=$!
+	sleep 1
+
+	echo "Starting cluster"
+	${bin_dir}/cluster >$log_cluster 2>&1 &
+	pid_cluster=$!
+	sleep 1
+
+	echo "Starting user"
+	${bin_dir}/user |& tee $log_user
+
+	echo "Waiting for lb shutdown"
+	wait $pid_lb
+
+	echo "Waiting for cluster shutdown"
+	wait $pid_cluster
+}
+
 echo "Removing existing output"
 rm -fr ./tmp/output
 
+echo "Creating bin dir"
+mkdir -p ${bin_dir}
+
 echo "Creating log dir"
-mkdir -p log/lb/
-mkdir -p log/cluster/
-mkdir -p log/user/
+mkdir -p ${log_dir}/lb/
+mkdir -p ${log_dir}/cluster/
+mkdir -p ${log_dir}/user/
 
 echo "Compiling binaries"
-go build -ldflags='-s -w' -o tmp/cluster ./cmd/cluster
-go build -ldflags='-s -w' -o tmp/loadbalance ./cmd/loadbalance
-go build -ldflags='-s -w' -o tmp/user ./cmd/user
-
-runsim() {
-	lblogfile="log/lb/lb-$(basename "$1" .yaml).log"
-	clusterlogfile="log/cluster/cluster-$(basename "$1" .yaml).log"
-	userlogfile="log/user/user-$(basename "$1" .yaml).log"
-
-	# kill the process binding port 8000 (if exists)
-	pid=$(lsof -t -i:8000)
-	[[ -z $pid ]] || kill -9 $(lsof -t -i:8000)
-
-	export CONFIG_PATH=$1
-	echo "Running simulation: $1"
-	./tmp/loadbalance >$lblogfile 2>&1 &
-	sleep 1
-	./tmp/cluster >$clusterlogfile 2>&1 &
-	sleep 1
-	./tmp/user |& tee $userlogfile
-	sleep 1
-}
+go build -ldflags='-s -w' -o ${bin_dir}/cluster ./cmd/cluster
+go build -ldflags='-s -w' -o ${bin_dir}/loadbalance ./cmd/loadbalance
+go build -ldflags='-s -w' -o ${bin_dir}/user ./cmd/user
 
 file=$1
 
