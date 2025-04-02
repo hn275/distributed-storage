@@ -145,6 +145,8 @@ func writeResultsToFile(filename string) {
 			"err", err)
 		return
 	}
+
+	slog.Info("End of simulation")
 }
 
 func runSim(fileHash string, wg *sync.WaitGroup, clientIdx int, interval uint32) {
