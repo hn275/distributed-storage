@@ -35,18 +35,18 @@ runsim() {
 echo "Removing existing output"
 rm -fr ./tmp/output
 
-echo "Creating bin dir"
-mkdir -p ${bin_dir}
-
 echo "Creating log dir"
 mkdir -p ${log_dir}/lb/
 mkdir -p ${log_dir}/cluster/
 mkdir -p ${log_dir}/user/
 
-echo "Compiling binaries"
-go build -ldflags='-s -w' -o ${bin_dir}/cluster ./cmd/cluster
-go build -ldflags='-s -w' -o ${bin_dir}/loadbalance ./cmd/loadbalance
-go build -ldflags='-s -w' -o ${bin_dir}/user ./cmd/user
+# echo "Creating bin dir"
+# mkdir -p ${bin_dir}
+
+# echo "Compiling binaries"
+# go build -ldflags='-s -w' -o ${bin_dir}/cluster ./cmd/cluster
+# go build -ldflags='-s -w' -o ${bin_dir}/loadbalance ./cmd/loadbalance
+# go build -ldflags='-s -w' -o ${bin_dir}/user ./cmd/user
 
 file=$1
 
