@@ -1,11 +1,10 @@
 services:
-  loadbalance:
+  distributed-storage:
     container_name: csc466
     networks:
       - ds
     build:
       context: .
-      dockerfile: ./dockerfiles/Dockerfile
     cap_add:
       - NET_ADMIN
     entrypoint: >
@@ -25,7 +24,8 @@ services:
           cpus: "0"
           memory: 0G
     volumes:
-      - ./output:/go/tmp/
+      - ./output/:/app/tmp/output/
+      - ./log/:/app/tmp/log/
 
 networks:
   ds:
