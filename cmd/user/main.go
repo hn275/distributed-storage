@@ -101,14 +101,21 @@ func main() {
 	clientIdx := 0
 	// requesting files
 	for fileName, freq := range files {
+		if freq == 0 {
+			continue
+		}
+
 		slog.Info("requesting file.", "file-name", fileName, "freq", freq)
+
 		wg.Add(freq)
+
 		for range freq {
 			// pass in global count variable
 			go runSim(fileName, wg, clientIdx, conf.User.Interval, tel)
 			// increment the global count variable
 			clientIdx++
 		}
+
 	}
 
 	wg.Wait()
@@ -171,6 +178,11 @@ func writeResultsToFile(filename string) {
 	slog.Info("End of simulation")
 }
 
+type Result struct {
+	tele ClientTimeData
+	err  error
+}
+
 func runSim(fileHash string, wg *sync.WaitGroup, clientIdx int, interval uint32) {
 	defer wg.Done()
 
@@ -182,10 +194,7 @@ func runSim(fileHash string, wg *sync.WaitGroup, clientIdx int, interval uint32)
 
 	time.Sleep(sleepDuration)
 
-	type Result struct {
-		tele ClientTimeData
-		err  error
-	}
+	slog.Info("request sent.", "file-name", fileHash, "client-id", clientIdx)
 
 	doneChan := make(chan error, 1)
 
@@ -283,8 +292,6 @@ func request(fileHash string) (int64, error) {
 	if _, err := dataConn.Write(buf[:64]); err != nil {
 		return 0, fmt.Errorf("failed to write to datanode; %v", err)
 	}
-
-	// slog.Info("file name + pub key sent", "addr", dataConn.RemoteAddr())
 
 	// write responses to hasher
 	h := blake3.New(crypto.DigestSize, crypto.UserPublicKey[:])
