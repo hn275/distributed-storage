@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/csv"
 	"encoding/hex"
 	"errors"
 	"flag"
@@ -12,9 +11,9 @@ import (
 	"math/rand"
 	"net"
 	"os"
-	"path/filepath"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -23,25 +22,45 @@ import (
 	"github.com/hn275/distributed-storage/internal/crypto"
 	"github.com/hn275/distributed-storage/internal/database"
 	"github.com/hn275/distributed-storage/internal/network"
+	"github.com/hn275/distributed-storage/internal/telemetry"
 	"lukechampine.com/blake3"
 )
 
-const readDeadLine = 5 * time.Second
-
-// can put the struct here.
-type ClientTimeData struct {
-	duration time.Duration
-	size     int64
-}
+const (
+	simDeadLine     = 5 * time.Minute
+	outputDir       = "tmp/output/user"
+	timeStampFormat = "15:04:05.000"
+)
 
 var (
-	lbNodeAddr        string
-	allClientTimeData []ClientTimeData
-
+	lbNodeAddr     string
 	shutdownSignal = [...]byte{network.ShutdownSig}
 )
 
+type ClientTimeData struct {
+	duration  time.Duration
+	size      int64
+	timeStart time.Time
+	timeEnd   time.Time
+}
+
+// Row implements telemetry.Record.
+func (c *ClientTimeData) Row() []string {
+	return []string{
+		strconv.FormatInt(c.duration.Milliseconds(), 10), // duration
+		strconv.FormatInt(c.size, 10),                    // size
+		c.timeStart.Format(timeStampFormat),              // time-start
+		strconv.FormatInt(c.timeStart.UnixNano(), 10),    //time-start(ns)
+		c.timeEnd.Format(timeStampFormat),                // time-start
+		strconv.FormatInt(c.timeEnd.UnixNano(), 10),      //time-end(ns)
+	}
+}
+
 func main() {
+	// make output dir
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		panic(err)
+	}
 
 	flag.StringVar(&lbNodeAddr, "lbaddr", "127.0.0.1:8000", "address of the loadbalancer")
 	flag.Parse()
@@ -55,6 +74,20 @@ func main() {
 		panic(err)
 	}
 
+	// telemetry
+	tel, err := telemetry.New(
+		fmt.Sprintf("%s/client-%s.csv", outputDir, conf.Experiment.Name),
+		[]string{
+			"duration", "size", "time-start",
+			"time-start(ns)", "time-end", "time-end(ns)"},
+	)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer tel.Done()
+
 	// get file addresses
 	fileIndex, err := database.NewFileIndex()
 	if err != nil {
@@ -64,23 +97,15 @@ func main() {
 	wg := new(sync.WaitGroup)
 
 	files := conf.User.GetFiles(fileIndex)
-	numClients := 0
-
-	for _, freq := range files {
-		numClients = numClients + freq
-	}
-	// dynamically allocate client time array
-	allClientTimeData = make([]ClientTimeData, numClients)
 
 	clientIdx := 0
-
 	// requesting files
 	for fileName, freq := range files {
 		slog.Info("requesting file.", "file-name", fileName, "freq", freq)
 		wg.Add(freq)
-		for i := 0; i < freq; i++ {
+		for range freq {
 			// pass in global count variable
-			go runSim(fileName, wg, clientIdx, conf.User.Interval)
+			go runSim(fileName, wg, clientIdx, conf.User.Interval, tel)
 			// increment the global count variable
 			clientIdx++
 		}
@@ -88,12 +113,7 @@ func main() {
 
 	wg.Wait()
 
-	// write client request time data to output file
-	expName := conf.Experiment.Name
-	writeResultsToFile("client-" + expName + ".csv")
-
 	// send shutdown signal to load balancer
-
 	// open socket to load balancer
 	lbConn, err := net.Dial(network.ProtoTcp4, lbNodeAddr)
 	if err != nil {
@@ -105,55 +125,17 @@ func main() {
 	if _, err := lbConn.Write(shutdownSignal[:]); err != nil {
 		panic(err)
 	}
+
+	slog.Info("End of simulation")
 }
 
-func writeResultsToFile(filename string) {
-	dir := "tmp/output/user"
-
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		slog.Error("error creating directory",
-			"err", err)
-		return
-	}
-
-	filePath := filepath.Join(dir, filename)
-	file, err := os.Create(filePath)
-	if err != nil {
-		slog.Error("error creating file",
-			"err", err)
-		return
-	}
-	defer file.Close()
-
-	records := [][]string{
-		{"duration", "size"},
-	}
-
-	for _, data := range allClientTimeData {
-		row := []string{
-			strconv.FormatInt(data.duration.Milliseconds(), 10),
-			strconv.FormatInt(data.size, 10),
-		}
-		records = append(records, row)
-	}
-
-	w := csv.NewWriter(file)
-	w.WriteAll(records)
-
-	if err := w.Error(); err != nil {
-		slog.Error("error writing csv",
-			"err", err)
-		return
-	}
-}
-
-func runSim(fileHash string, wg *sync.WaitGroup, clientIdx int, interval uint32) {
+func runSim(fileHash string, wg *sync.WaitGroup, clientIdx int, interval uint32, tel *telemetry.Telemetry) {
 	defer wg.Done()
 
 	// sleep for a random number of seconds in [0, interval]
 	sleepDuration := time.Duration(rand.Float32()*float32(interval)) * time.Second
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), simDeadLine)
 	defer cancel()
 
 	time.Sleep(sleepDuration)
@@ -163,47 +145,50 @@ func runSim(fileHash string, wg *sync.WaitGroup, clientIdx int, interval uint32)
 		err  error
 	}
 
-	resultChan := make(chan Result, 10)
+	doneChan := make(chan error, 1)
 
 	go func() {
-		start := time.Now()
+		timeStart := time.Now()
 
 		fileSize, err := request(fileHash)
 		if err != nil {
-			resultChan <- Result{
-				err: err,
-			}
+			doneChan <- err
 			return
 		}
 
 		// Caputure request time for this client
-		dur := time.Since(start)
-		// Write time data to the global array for main thread to write to csv later
-		resultChan <- Result{
-			tele: ClientTimeData{duration: dur, size: fileSize},
-			err:  nil,
+		dur := time.Since(timeStart)
+		timeEnd := timeStart.Add(dur)
+
+		rec := &ClientTimeData{
+			duration:  dur,
+			size:      fileSize,
+			timeStart: timeStart,
+			timeEnd:   timeEnd,
 		}
+
+		tel.Collect(rec)
+
+		slog.Info("file request.",
+			"file-size", humanize.Bytes(uint64(rec.size)),
+			"dur", rec.duration)
+
+		doneChan <- nil
 	}()
 
 	select {
-	case record := <-resultChan:
-		if record.err != nil {
+	case err := <-doneChan:
+		if err != nil {
 			slog.Error("request failed.",
 				"file-hash", fileHash,
-				"err", record.err)
-		} else {
-			allClientTimeData[clientIdx] = record.tele
-			slog.Info("file request.",
-				"file-size", humanize.Bytes(uint64(record.tele.size)),
-				"dur", record.tele.duration)
+				"err", err)
 		}
+		return
 
 	case <-ctx.Done():
-		allClientTimeData[clientIdx] = ClientTimeData{0, 0}
-		slog.Error("request timed out.")
+		slog.Error("request timed out.", "client", clientIdx)
 		return
 	}
-
 }
 
 // request the file, returns (file size, error)
@@ -211,7 +196,7 @@ func request(fileHash string) (int64, error) {
 
 	// open listener for data node
 	// open a new port for user to dial
-	soc, err := net.Listen(network.ProtoTcp4, network.RandomLocalPort)
+	soc, err := makeListener(network.ProtoTcp4, network.RandomLocalPort)
 	if err != nil {
 		return 0, err
 	}
@@ -244,13 +229,6 @@ func request(fileHash string) (int64, error) {
 
 	defer dataConn.Close()
 
-	/*
-		err = dataConn.SetReadDeadline(time.Now().Add(readDeadLine))
-		if err != nil {
-			return 0, err
-		}
-	*/
-
 	// sending file name + pub key
 	// 64 bytes, 32 byte file hash, 32 byte pub key
 	var buf [64]byte
@@ -276,11 +254,33 @@ func request(fileHash string) (int64, error) {
 
 	// hash the content then check the digest against the file name
 	digest := h.Sum(nil)
-	if !byteEqual(digest, buf[:32]) {
+	precomputedDigest := buf[:32]
+	if !byteEqual(digest, precomputedDigest) {
 		return 0, errors.New("file integrity violation")
 	}
 
 	return byteCopied, nil
+}
+
+func makeListener(protocol string, addr string) (net.Listener, error) {
+	// reusing addr
+	lc := net.ListenConfig{
+		Control: func(_, _ string, c syscall.RawConn) error {
+			var opErr error
+			err := c.Control(func(fd uintptr) {
+				opErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+
+			})
+
+			if err != nil {
+				return err
+			} else {
+				return opErr
+			}
+		},
+	}
+
+	return lc.Listen(context.Background(), protocol, addr)
 }
 
 func byteEqual(buf1, buf2 []byte) bool {
