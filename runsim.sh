@@ -30,6 +30,8 @@ runsim() {
 
 	echo "Waiting for cluster shutdown"
 	wait $pid_cluster
+
+	sleep 5
 }
 
 echo "Creating log dir"
@@ -51,9 +53,11 @@ else
 	runsim $file
 fi
 
-echo "Generating plot: user"
-./gen_files.py user
-echo "Generating plot: cluster"
-./gen_files.py cluster
-echo "Generating plot: lb"
-./gen_files.py lb
+# echo "Generating plot: user"
+# python3 ./gen_files.py user
+#
+# echo "Generating plot: cluster"
+# python3 ./gen_files.py cluster
+#
+# echo "Generating plot: lb"
+# python3 ./gen_files.py lb
