@@ -53,11 +53,11 @@ else
 	runsim $file
 fi
 
-# echo "Generating plot: user"
-# python3 ./gen_files.py user
-#
-# echo "Generating plot: cluster"
-# python3 ./gen_files.py cluster
-#
+echo "Generating plot: user"
+python3 ./gen_files.py user
+
+echo "Generating plot: cluster"
+python3 ./gen_files.py cluster
+
 # echo "Generating plot: lb"
 # python3 ./gen_files.py lb
