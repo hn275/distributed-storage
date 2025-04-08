@@ -17,6 +17,7 @@ require (
 )
 
 require (
+	github.com/Jeffail/tunny v0.1.4 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 )
