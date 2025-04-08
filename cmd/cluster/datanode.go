@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/tunny"
 	"github.com/hn275/distributed-storage/internal"
 	"github.com/hn275/distributed-storage/internal/crypto"
 	"github.com/hn275/distributed-storage/internal/database"
@@ -29,27 +30,15 @@ type dataNode struct {
 	requests      uint64  // num of requests served
 	overHeadParam int64   // overhead in nano seconds, this is for sleep
 
-	log *slog.Logger
-	tel *telemetry.Telemetry
-	mtx *sync.Mutex
+	log  *slog.Logger
+	tel  *telemetry.Telemetry
+	mtx  *sync.Mutex
+	pool *tunny.Pool
 }
 
-func makeDataNode(c net.Conn, id uint16, tel *telemetry.Telemetry, overHeadparam int64) *dataNode {
-	logger := slog.Default().With("node-id", id)
-	dataNode := &dataNode{
-		Conn: c,
-
-		id:            id,
-		avgRT:         0.0,
-		requests:      0,
-		overHeadParam: overHeadparam,
-
-		log: logger,
-		tel: tel,
-		mtx: new(sync.Mutex),
-	}
-
-	return dataNode
+type poolService struct {
+	dataNode *dataNode
+	msg      []byte
 }
 
 func (d *dataNode) Write(buf []byte) (int, error) {
@@ -59,7 +48,7 @@ func (d *dataNode) Write(buf []byte) (int, error) {
 	return n, err
 }
 
-func nodeInitialize(lbAddr string, nodeID uint16, t *telemetry.Telemetry, overHeadParam int64) (*dataNode, error) {
+func nodeInitialize(lbAddr string, nodeID uint16, t *telemetry.Telemetry, overHeadParam int64, capacity uint16) (*dataNode, error) {
 	laddr, err := net.ResolveTCPAddr(network.ProtoTcp4, randomLocalPort)
 	if err != nil {
 		return nil, err
@@ -83,9 +72,32 @@ func nodeInitialize(lbAddr string, nodeID uint16, t *telemetry.Telemetry, overHe
 		return nil, err
 	}
 
-	dataNode := makeDataNode(lbSoc, nodeID, t, overHeadParam)
+	logger := slog.Default().With("node-id", nodeID)
+
+	dataNode := &dataNode{
+		Conn: lbSoc,
+
+		id:            nodeID,
+		avgRT:         0.0,
+		requests:      0,
+		overHeadParam: overHeadParam,
+
+		log:  logger,
+		tel:  t,
+		mtx:  new(sync.Mutex),
+		pool: tunny.NewFunc(int(capacity), poolServ),
+	}
 
 	return dataNode, nil
+
+}
+
+func poolServ(in interface{}) interface{} {
+	req, ok := in.(poolService)
+	if !ok {
+		panic("wrong type")
+	}
+	return req.dataNode.handleUserJoin(req.msg)
 }
 
 func (d *dataNode) Listen(wg *sync.WaitGroup) {
@@ -129,7 +141,8 @@ func (d *dataNode) Listen(wg *sync.WaitGroup) {
 			go func() {
 				defer wg.Done()
 
-				if err := d.handleUserJoin(buf); err != nil {
+				err := d.pool.Process(poolService{d, buf})
+				if err != nil {
 					d.log.Error("failed to service UserNodeJoin",
 						"err", err)
 				}
@@ -164,13 +177,12 @@ func (d *dataNode) handleUserJoin(buf []byte) error {
 
 	time.Sleep(time.Nanosecond * time.Duration(d.overHeadParam))
 
-	// get user's listener address and dial
+	// dial user's listener
 	userAddr, err := network.BytesToAddr(buf[1:7])
 	if err != nil {
 		return err
 	}
 
-	// dials to user's listener
 	user, err := net.DialTCP(network.ProtoTcp4, nil, userAddr.(*net.TCPAddr))
 	if err != nil {
 		return err

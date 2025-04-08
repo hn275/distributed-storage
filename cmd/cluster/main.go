@@ -55,7 +55,7 @@ func main() {
 				overHeadParam = rand.Int63n(globConf.Experiment.OverheadParam) * nsToMs
 			}
 
-			node, err := nodeInitialize(lbNodeAddr, nodeID, tel, overHeadParam)
+			node, err := nodeInitialize(lbNodeAddr, nodeID, tel, overHeadParam, conf.Capacity)
 			if err != nil {
 				slog.Error(
 					"failed to initialize a data node.",

@@ -17,7 +17,8 @@ type Config struct {
 }
 
 type clusterYaml struct {
-	Node uint16
+	Node     uint16
+	Capacity uint16
 }
 
 type loadbalancerYaml struct {
