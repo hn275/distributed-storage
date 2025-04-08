@@ -26,6 +26,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY --from=go /app/runsim.sh ./runsim.sh
+RUN chmod +x ./runsim.sh
 COPY gen_files.py .
 
 CMD ["./runsim.sh"]
