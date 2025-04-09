@@ -11,7 +11,10 @@ import (
 	"github.com/hn275/distributed-storage/internal/telemetry"
 )
 
+var wg *sync.WaitGroup
+
 func main() {
+	wg = new(sync.WaitGroup)
 
 	// reading in config
 	configPath := internal.EnvOrDefault("CONFIG_PATH", config.DefaultConfigPath)
@@ -42,13 +45,12 @@ func main() {
 		"load-balancer-addr", lbNodeAddr,
 	)
 
-	wg := new(sync.WaitGroup)
 	wg.Add(int(conf.Node))
 
 	const nsToMs = 1000000
 
 	for nodeID := uint16(0); nodeID < conf.Node; nodeID++ {
-		go func(wg *sync.WaitGroup, nodeIndex uint16) {
+		go func(nodeIndex uint16) {
 
 			overHeadParam := int64(0)
 			if !globConf.Experiment.Homogeneous {
@@ -64,8 +66,8 @@ func main() {
 				)
 			}
 
-			node.Listen(wg)
-		}(wg, nodeID)
+			node.Listen()
+		}(nodeID)
 	}
 
 	wg.Wait()

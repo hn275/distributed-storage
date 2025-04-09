@@ -27,14 +27,17 @@ type dataNode struct {
 
 	id            uint16
 	avgRT         float64 // average response time, in nanoseconds
-	requests      uint64  // num of requests served
+	requestCtr    uint64  // num of requests served
 	overHeadParam int64   // overhead in nano seconds, this is for sleep
 
 	log  *slog.Logger
 	tel  *telemetry.Telemetry
 	mtx  *sync.Mutex
 	pool *tunny.Pool
+	reqQ chan request
 }
+
+type request []byte
 
 type poolService struct {
 	dataNode *dataNode
@@ -79,7 +82,7 @@ func nodeInitialize(lbAddr string, nodeID uint16, t *telemetry.Telemetry, overHe
 
 		id:            nodeID,
 		avgRT:         0.0,
-		requests:      0,
+		requestCtr:    0,
 		overHeadParam: overHeadParam,
 
 		log:  logger,
@@ -93,6 +96,7 @@ func nodeInitialize(lbAddr string, nodeID uint16, t *telemetry.Telemetry, overHe
 }
 
 func poolServ(in interface{}) interface{} {
+	defer wg.Done()
 	req, ok := in.(poolService)
 	if !ok {
 		panic("wrong type")
@@ -100,7 +104,7 @@ func poolServ(in interface{}) interface{} {
 	return req.dataNode.handleUserJoin(req.msg)
 }
 
-func (d *dataNode) Listen(wg *sync.WaitGroup) {
+func (d *dataNode) Listen() {
 	defer wg.Done()
 	defer d.Close()
 
@@ -242,8 +246,8 @@ func (d *dataNode) healthCheckReport(srvStartTime *time.Time) {
 
 	// calculate the next average
 	dur := float64(time.Since(*srvStartTime).Nanoseconds())
-	d.avgRT = internal.CalcMovingAvg(d.requests, d.avgRT, dur)
-	d.requests += 1
+	d.avgRT = internal.CalcMovingAvg(d.requestCtr, d.avgRT, dur)
+	d.requestCtr += 1
 
 	// sends health check packet to LB
 	buf := make([]byte, 16)
