@@ -6,7 +6,6 @@ import (
 	"log"
 	"log/slog"
 	"net"
-	"time"
 
 	"github.com/hn275/distributed-storage/internal"
 	"github.com/hn275/distributed-storage/internal/algo"
@@ -72,7 +71,6 @@ func main() {
 
 	// serving
 	lbSrv.listen()
-	time.Sleep(5 * time.Second)
 
 	// TODO: write telemetry data out
 	slog.Info("end of simulation")
