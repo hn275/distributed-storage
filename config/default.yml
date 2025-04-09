@@ -1,18 +1,19 @@
 user:
-  x-small: 1
+  x-small: 0
   small: 0
   medium: 0
   large: 0
-  x-large: 0
+  x-large: 300
   xx-large: 0
-  interval: 0
+  interval: 10
 
 cluster:
-  node: 10
+  node: 20
+  capacity: 10
 
 load-balancer:
   # allowed values: simple-round-robin, least-connections, least-response-time
-  algo: simple-round-robin
+  algo: least-connections
   local-port: 8000
 
 experiment:
