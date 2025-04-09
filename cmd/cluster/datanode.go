@@ -34,14 +34,11 @@ type dataNode struct {
 	tel  *telemetry.Telemetry
 	mtx  *sync.Mutex
 	pool *tunny.Pool
-	reqQ chan request
 }
 
-type request []byte
-
-type poolService struct {
-	dataNode *dataNode
-	msg      []byte
+type request struct {
+	msg       []byte
+	timeStart time.Time
 }
 
 func (d *dataNode) Write(buf []byte) (int, error) {
@@ -51,7 +48,10 @@ func (d *dataNode) Write(buf []byte) (int, error) {
 	return n, err
 }
 
-func nodeInitialize(lbAddr string, nodeID uint16, t *telemetry.Telemetry, overHeadParam int64, capacity uint16) (*dataNode, error) {
+func nodeInitialize(
+	lbAddr string, nodeID uint16, t *telemetry.Telemetry,
+	overHeadParam int64, capacity uint16,
+) (*dataNode, error) {
 	laddr, err := net.ResolveTCPAddr(network.ProtoTcp4, randomLocalPort)
 	if err != nil {
 		return nil, err
@@ -88,25 +88,21 @@ func nodeInitialize(lbAddr string, nodeID uint16, t *telemetry.Telemetry, overHe
 		log:  logger,
 		tel:  t,
 		mtx:  new(sync.Mutex),
-		pool: tunny.NewFunc(int(capacity), poolServ),
+		pool: nil,
 	}
+
+	dataNode.pool = tunny.NewFunc(int(capacity), func(i any) any {
+		return dataNode.handleUserJoin(i.(*request))
+	})
 
 	return dataNode, nil
 
 }
 
-func poolServ(in interface{}) interface{} {
-	defer wg.Done()
-	req, ok := in.(poolService)
-	if !ok {
-		panic("wrong type")
-	}
-	return req.dataNode.handleUserJoin(req.msg)
-}
-
 func (d *dataNode) Listen() {
 	defer wg.Done()
 	defer d.Close()
+	defer d.pool.Close()
 
 	d.tel.Collect(&event{
 		nodeID:       d.id,
@@ -144,11 +140,9 @@ func (d *dataNode) Listen() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-
-				err := d.pool.Process(poolService{d, buf})
-				if err != nil {
-					d.log.Error("failed to service UserNodeJoin",
-						"err", err)
+				req := &request{buf, time.Now()}
+				if err := d.pool.Process(req); err != nil {
+					d.log.Error("failed to service request.", "err", err.(error))
 				}
 			}()
 
@@ -171,13 +165,13 @@ func (d *dataNode) Listen() {
 	})
 }
 
-func (d *dataNode) handleUserJoin(buf []byte) error {
-	if len(buf) != 16 {
+func (d *dataNode) handleUserJoin(req *request) error {
+	if len(req.msg) != 16 {
 		panic("handleUserJoin invalid buf size")
 	}
 
-	ts := time.Now()
-	defer d.healthCheckReport(&ts)
+	buf, ts := req.msg, &req.timeStart
+	defer d.healthCheckReport(ts)
 
 	time.Sleep(time.Nanosecond * time.Duration(d.overHeadParam))
 
@@ -232,8 +226,8 @@ func (d *dataNode) handleUserJoin(buf []byte) error {
 		nodeOverhead: d.overHeadParam,
 		eventType:    eventFileTransfer,
 		peer:         peerLB,
-		timestamp:    ts,
-		duration:     uint64(time.Since(ts).Nanoseconds()),
+		timestamp:    *ts,
+		duration:     uint64(time.Since(*ts).Nanoseconds()),
 		size:         uint64(n),
 		avgRT:        d.avgRT,
 	})
