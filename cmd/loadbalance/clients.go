@@ -7,27 +7,12 @@ import (
 	"log/slog"
 	"math"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/hn275/distributed-storage/internal/algo"
 	"github.com/hn275/distributed-storage/internal/network"
 )
-
-type clientMap struct{ sync.Map }
-
-func (cx *clientMap) setClient(userConn net.Conn) {
-	cx.Store(userConn.RemoteAddr().String(), userConn)
-}
-
-func (cx *clientMap) getClient(userAddr net.Addr) (net.Conn, bool) {
-	v, ok := cx.LoadAndDelete(userAddr.String())
-	if !ok {
-		return nil, ok
-	}
-	return v.(net.Conn), ok
-}
 
 type dataNode struct {
 	net.Conn
