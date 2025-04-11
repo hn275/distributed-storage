@@ -145,6 +145,17 @@ func (d *dataNode) Listen() {
 				if err := d.pool.Process(req); err != nil {
 					d.log.Error("failed to service request.", "err", err.(error))
 				}
+				d.tel.Collect(&event{
+					nodeID:       d.id,
+					nodeOverhead: d.overHeadParam,
+					eventType:    eventRequestRecv,
+					peer:         "",
+					timestamp:    req.timeStart,
+					duration:     0,
+					size:         0,
+					avgRT:        d.avgRT,
+					activeReq:    d.requestCtr,
+				})
 			}()
 
 		default:

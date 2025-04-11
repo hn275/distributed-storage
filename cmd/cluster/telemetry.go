@@ -20,6 +20,7 @@ const (
 	eventPortForward  = eventType("port-forwarding")
 	eventHealthCheck  = eventType("healthcheck")
 	eventFileTransfer = eventType("file-transfer")
+	eventRequestRecv  = eventType("request-received")
 )
 
 var eventHeaders = []string{
