@@ -5,17 +5,21 @@ import sys
 import matplotlib.pyplot as plt
 import os
 import random
+import matplotlib as mpl
+
+mpl.rcParams.update({'font.size': 12})  # Set global font size
 
 ALG_OPTIONS = (("rr", "simple-round-robin"), ("lc", "least-connections"), ("lrt", "least-response-time"))
 HOMOG_OPTIONS = (True, False)
-INTERVAL = 10
+INTERVAL = 20
 FILE_SZ = ("s", "m", "l", "v") # be sure that v is always the final element
-RATES = (10, 32, 100, 320, 1000)
+RATES = (10, 32, 100, 320, 500)
 LATENCY_OPTIONS = (0, 100)
 USER_DIR = "tmp/output/user"
 LB_DIR = "tmp/output/lb"
 CLUSTER_DIR = "tmp/output/cluster"
 DATANODE_COUNT = 20
+CLUSTER_CAPACITY = 20
 
 def write_random_numbers(filename="output.txt"):
     with open(filename, "w") as file:
@@ -24,8 +28,9 @@ def write_random_numbers(filename="output.txt"):
             file.write(f"{num},256\n")
 
 class ClientExp:
-    def __init__(self, alg, net_delay=None, homog=None, interval=None, fsz=None, fsz_bytes=None, rate=None, avg_serv_time=None, errors=None):
+    def __init__(self, alg, fname= None, net_delay=None, homog=None, interval=None, fsz=None, fsz_bytes=None, rate=None, avg_serv_time=None, errors=None, values=None):
         self.alg = alg
+        self.fname = fname
         self.net_delay = net_delay
         self.homog = homog
         self.interval = interval
@@ -34,9 +39,10 @@ class ClientExp:
         self.rate = rate
         self.avg_serv_time = avg_serv_time
         self.errors = errors # errors as a percentages
+        self.values = values
     
     def __repr__(self):
-        return f"ClientExp(alg={self.alg}, net_delay={self.net_delay}, homog={self.homog}, interval={self.interval}, fsz={self.fsz}, rate={self.rate}, avg_serv_time={self.avg_serv_time}, errors={self.errors}"
+        return f"ClientExp(alg={self.alg}, net_delay={self.net_delay}, homog={self.homog}, interval={self.interval}, fsz={self.fsz}, rate={self.rate}, avg_serv_time={self.avg_serv_time}, errors={self.errors}, std_dev={self.std_dev}"
     
 class LBExp:
     def __init__(self, alg, net_delay=None, homog=None, interval=None, fsz=None, rate=None, req_per_sec=None):
@@ -62,6 +68,7 @@ def gen_config(name, algo, homog, latency, interval, files):
              f"\n" + \
              f"cluster:\n" + \
              f"  node: {DATANODE_COUNT}\n" + \
+             f"  capacity: {CLUSTER_CAPACITY}\n" + \
              f"\n" + \
              f"load-balancer:\n" + \
              f"  algo: {algo}\n" + \
@@ -101,8 +108,8 @@ def generate_configs(opt):
             for homog in HOMOG_OPTIONS:
                 for f_sz in FILE_SZ:
                     for rate in RATES: # requests/sec
-                        if ((latency == 0 and homog == False and f_sz == "m" and opt == "configs1") or
-                            (latency == 100 and homog == False and f_sz == "v" and opt == "configs2")):
+                        if ((latency == LATENCY_OPTIONS[0] and homog == False and f_sz == "v" and opt == "configs1") or
+                            (latency == LATENCY_OPTIONS[1] and homog == False and f_sz == "v" and opt == "configs2")):
                             name = f"exp-{algo[0]}-lat-{latency}-homog-{str(homog).lower()}-int-{INTERVAL}-fsz-{f_sz}-rate-{rate}"
                             requests = varying_fsz_with_fixed_amount[rate] if f_sz == "v" else get_requests(rate, INTERVAL, f_sz)
                             config = gen_config(name, algo[1], homog, latency, INTERVAL, requests)
@@ -114,14 +121,15 @@ def generate_configs(opt):
     return
 
 def get_client_exp( filename ):
-    pattern = re.compile(rf"{USER_DIR}/client-exp-(rr|lc|lrt)-lat-(\d+)-homog-(true|false)-int-(\d+)-fsz-(s|m|l|v)-rate-(\d+)\.csv")
+    pattern = re.compile(rf"{USER_DIR}/client-(exp-(rr|lc|lrt)-lat-(\d+)-homog-(true|false)-int-(\d+)-fsz-(s|m|l|v)-rate-(\d+))\.csv")
     match = pattern.match(filename)
     if not match:
         print(f"Error: unable to match file {filename}")
         return ClientExp("ERROR")
 
-    alg, net_delay, homog, interval, fsz, rate = match.groups()
+    fname, alg, net_delay, homog, interval, fsz, rate = match.groups()
     sz = 0
+    values = []
 
     try:
         fd = open(filename, "r")
@@ -139,15 +147,20 @@ def get_client_exp( filename ):
 
     # Save data in dict
     for line in fd:
-        dur, sz = line.split(",")
+        items = line.split(",")
+        dur = items[0]
+        sz = items[1]
+
         dur = float(dur)
         sz = int(sz)
         if dur == 0 and sz == 0:
             errors += 1
         
         else:
-            total += float(dur) / 1000
+            dur = dur / 1000
+            total += dur
             length_no_errors += 1
+            values.append(dur)
         
         full_length += 1
     
@@ -159,7 +172,18 @@ def get_client_exp( filename ):
     
     homog = True if homog == "true" else False
 
-    return ClientExp(alg, int(net_delay), homog, int(interval), fsz, int(sz), int(rate), total/length_no_errors, errors/full_length)
+    return ClientExp(alg, fname, int(net_delay), homog, int(interval), fsz, int(sz), int(rate), total/length_no_errors, errors/full_length, values)
+
+def generate_client_serv_time_distribution(client_exp, figure_name):
+    save_dir = "tmp/output/client-distributions"
+    os.makedirs(save_dir, exist_ok=True)
+
+    plt.hist(client_exp.values, 20)
+    plt.title(f"{get_alg_string(client_exp.alg)}: Service Time Distribution", pad = 20)
+    plt.ylabel("Frequency")
+    plt.xlabel('Service Time (sec)')
+    plt.savefig(os.path.join(save_dir, figure_name), dpi=300, bbox_inches='tight')
+    plt.close()
 
 
 def get_lb_exp( filename ):
@@ -219,20 +243,20 @@ def generate_client_avg_time_vs_size(data, title, figure_name) -> None:
 
     # Sort bins by request rate
     {data[bin].sort(key=lambda c: c.rate) for bin in data}
-
+    END = len(RATES)
     # Plot
     plt.figure(figsize=(8, 5))
-    for bin in data:
+    colors = plt.get_cmap('tab10').colors
+    for idx, bin in enumerate(data):
         series = data[bin]
         avg_times = [c.avg_serv_time for c in series]
-        plt.plot(RATES, avg_times, marker='o', linestyle='-', label=bin.upper())
+        plt.plot(RATES[:END], avg_times[:END], marker='o', linestyle='-', label=bin.upper(), color=colors[idx])
 
-    plt.xscale("log", base=10)
     plt.xlabel('Request Rate (requests/sec)')
     plt.ylabel('Average Service Time (sec)')
     plt.title(title)
     plt.legend()
-    plt.savefig(os.path.join(save_dir, figure_name))
+    plt.savefig(os.path.join(save_dir, figure_name), dpi=300)
 
     return
 
@@ -267,8 +291,6 @@ def generate_lb_table_results(binned_data, output_file, bin_label):
 
     fd.close()
 
-    
-
 
 def generate_experiment_records(files, item_generator):
     records = []
@@ -297,12 +319,8 @@ def get_homog_string(homog):
     return "Homogeneous" if homog else "Heterogeneous"
 
 def get_file_size_string(sz):
-    if sz == "s":
-        return "Small"
-    elif sz == "m":
-        return "Medium"
-    else:
-        return "Large"
+    sz_to_string = {"s": "Small", "m" : "Medium", "l" : "Large", "v" : "Varied-sized"}
+    return sz_to_string[sz]
     
 def get_alg_string(alg):
     if alg == "rr":
@@ -310,13 +328,13 @@ def get_alg_string(alg):
     elif alg == "lc":
         return "Least Connections"
     else:
-        return "Least Service Time"
+        return "Least Response Time"
 
 def get_latency_string(latency):
     if latency == 0:
         return "Zero Network Delay"
     else:
-        return f"{latency}ms Network Delay"
+        return f"25 ms Network Delay"
 
 def bin_data_by_alg(data):
     bins = {"rr": [], "lc": [], "lrt": []}
@@ -363,18 +381,23 @@ def generate_client_errors(binned_data, output_file, bin_label):
     fd.close()
 
 
-
 def generate_user_plots():
     files = get_filenames_from_dir(USER_DIR)
     exp_records = generate_experiment_records(files, get_client_exp)
+
+    # Generate user service time distributions
+    for c in exp_records:
+        if c.alg != "ERROR":
+            figure_name = "hist-" + c.fname
+            generate_client_serv_time_distribution(c, figure_name)
+            print(f"Histogram generated: {figure_name}")
 
     # Charts with Avg time on Y, Request Rate on X, Same file Size, Same Lat, Same Homog, All Algs
     for homog in HOMOG_OPTIONS:
         for sz in FILE_SZ:
             for net_delay in LATENCY_OPTIONS:
                 filter = lambda r: r.homog == homog and r.fsz == sz and r.net_delay == net_delay
-                title = f"Average Client Request Service Time for {get_file_size_string(sz)} Files with Various"
-                title += f"\nRequest Rates with {get_homog_string(homog)} Nodes and {get_latency_string(net_delay)}"
+                title = f"Average Client Request Service Time vs Request Rate"
                 figure_name = f"algs-compare-homog-{homog}-fsz-{sz}-delay-{net_delay}"
                 filtered_records = filter_records(exp_records, filter)
                 binned_data = bin_data_by_alg(filtered_records)
@@ -436,7 +459,7 @@ def generate_requests_per_node():
     os.makedirs(save_dir, exist_ok=True)
 
     for file in files:
-        pattern = re.compile(rf"{CLUSTER_DIR}/cluster-exp-(((?:rr|lc|lrt)-lat-(?:\d+)-homog-(?:true|false)-int-(?:\d+)-fsz-(?:s|m|l|v)-rate-(?:\d+))\.csv)")
+        pattern = re.compile(rf"{CLUSTER_DIR}/cluster-exp-(((rr|lc|lrt)-lat-(?:\d+)-homog-(?:true|false)-int-(?:\d+)-fsz-(?:s|m|l|v)-rate-(?:\d+))\.csv)")
         match = pattern.match(file)
 
         if match == None:
@@ -488,16 +511,17 @@ def generate_requests_per_node():
             fd.write(f"{id},{node_req_count[id]},{overhead_map[id]}\n")
         
         fd.close()
-
+        
+        # bar chart
         figure_name = os.path.join(save_dir, "node-req-count-" +  match.groups()[1])
-
+        plt.figure()
         plt.bar(sorted_ids, values, color='skyblue')
         plt.xlabel('Node ID')
         plt.ylabel('Number of Requests')   
         plt.xticks(sorted_ids) 
+        plt.title(f"{get_alg_string(match.groups()[2])}: Requests per Node")
         plt.savefig(figure_name, dpi=300, bbox_inches='tight')
         plt.close()
-
         print(f"Output generated: {figure_name}")
     return
 
