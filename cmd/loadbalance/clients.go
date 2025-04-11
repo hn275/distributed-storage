@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log/slog"
-	"math"
 	"net"
 	"time"
 
@@ -35,6 +34,8 @@ func (d *dataNode) SetIndex(i int) {
 	d.index = i
 }
 
+const alpha = 0.4
+
 func (d *dataNode) Less(other algo.QueueNode) bool {
 	o := other.(*dataNode)
 
@@ -43,10 +44,11 @@ func (d *dataNode) Less(other algo.QueueNode) bool {
 		return false // nop
 
 	case algo.AlgoLeastResponseTime:
-		if math.Abs(d.avgRT-o.avgRT) < math.SmallestNonzeroFloat64 {
+		if d.requestCtr == o.requestCtr {
+			return d.avgRT < o.avgRT
+		} else {
 			return d.requestCtr < o.requestCtr
 		}
-		return d.avgRT < o.avgRT
 
 	case algo.AlgoLeastConnections:
 		return d.requestCtr < o.requestCtr
@@ -117,9 +119,9 @@ func (d *dataNode) listen() {
 }
 
 func (d *dataNode) handleHealthCheck(buf []byte) {
-	lbSrv.lock.Lock()
-
 	ts := time.Now()
+
+	lbSrv.lock.Lock()
 	defer lbSrv.lock.Unlock()
 
 	// data node sends a health check message when it's done serving the client.
