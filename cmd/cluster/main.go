@@ -24,6 +24,10 @@ func main() {
 	}
 
 	conf := &globConf.Cluster
+	if conf.Capacity == 0 {
+		panic("invalid capacity")
+	}
+
 	expName := globConf.Experiment.Name
 
 	// parse load balancing address
