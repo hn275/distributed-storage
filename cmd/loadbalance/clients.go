@@ -19,15 +19,15 @@ type dataNode struct {
 	wchan chan []byte
 	id    uint16
 
-	log      *slog.Logger
-	avgRT    float64
-	requests uint64
-	index    int
+	log        *slog.Logger
+	avgRT      float64
+	requestCtr uint64
+	index      int
 }
 
 // for debugging
 func (d *dataNode) String() string {
-	return fmt.Sprintf("[%d\t%f\t%d]", d.id, d.avgRT, d.requests)
+	return fmt.Sprintf("(%d,%d)", d.id, d.requestCtr)
 }
 
 // SetIndex implements algo.QueueNode.
@@ -44,12 +44,12 @@ func (d *dataNode) Less(other algo.QueueNode) bool {
 
 	case algo.AlgoLeastResponseTime:
 		if math.Abs(d.avgRT-o.avgRT) < math.SmallestNonzeroFloat64 {
-			return d.requests < o.requests
+			return d.requestCtr < o.requestCtr
 		}
 		return d.avgRT < o.avgRT
 
 	case algo.AlgoLeastConnections:
-		return d.requests < o.requests
+		return d.requestCtr < o.requestCtr
 
 	default:
 		panic(fmt.Sprintf("not implemented [%s].", globConf.LoadBalancer.Algorithm))
@@ -62,13 +62,13 @@ func makeDataNode(conn net.Conn, nodeID uint16) *dataNode {
 	logger := slog.Default().With("node-id", nodeID)
 
 	dataNode := &dataNode{
-		Conn:     conn,
-		wchan:    wchan,
-		id:       nodeID,
-		log:      logger,
-		avgRT:    0.0,
-		requests: 0,
-		index:    0,
+		Conn:       conn,
+		wchan:      wchan,
+		id:         nodeID,
+		log:        logger,
+		avgRT:      0.0,
+		requestCtr: 0,
+		index:      0,
 	}
 	go dataNode.listen()
 
@@ -124,7 +124,7 @@ func (d *dataNode) handleHealthCheck(buf []byte) {
 
 	// data node sends a health check message when it's done serving the client.
 	// so the active requests is reduced by 1.
-	d.requests -= 1
+	d.requestCtr -= 1
 
 	bufReader := bytes.NewReader(buf[1:])
 	err := binary.Read(bufReader, network.BinaryEndianess, &d.avgRT)
@@ -145,5 +145,6 @@ func (d *dataNode) handleHealthCheck(buf []byte) {
 		timestamp: ts,
 		duration:  time.Since(ts).Nanoseconds(),
 		avgRT:     d.avgRT,
+		activeReq: d.requestCtr,
 	})
 }

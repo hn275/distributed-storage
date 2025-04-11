@@ -38,3 +38,8 @@ func (rr *RoundRobin) Fix(int) error {
 	// nop
 	return nil
 }
+
+func (rr *RoundRobin) Queue() []QueueNode {
+	// nop
+	return []QueueNode{}
+}
