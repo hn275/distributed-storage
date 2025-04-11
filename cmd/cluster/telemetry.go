@@ -31,6 +31,7 @@ var eventHeaders = []string{
 	"duration(ns)",
 	"bytes-transferred",
 	"avgRT(ns)",
+	"active-requests",
 }
 
 // telemetry
@@ -43,6 +44,7 @@ type event struct {
 	duration     uint64 // in nanoseconds
 	size         uint64 // in bytes
 	avgRT        float64
+	activeReq    uint64
 }
 
 // Row implements telemetry.Record.
@@ -56,5 +58,6 @@ func (e *event) Row() []string {
 		fmt.Sprintf("%d", e.duration),
 		humanize.Bytes(e.size),
 		fmt.Sprintf("%f", e.avgRT),
+		fmt.Sprintf("%d", e.activeReq),
 	}
 }
