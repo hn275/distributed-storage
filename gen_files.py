@@ -385,9 +385,10 @@ def generate_user_plots():
 
     # Generate user service time distributions
     for c in exp_records:
-        figure_name = "hist-" + c.fname
-        generate_client_serv_time_distribution(c, figure_name)
-        print(f"Histogram generated: {figure_name}")
+        if c.alg != "ERROR":
+            figure_name = "hist-" + c.fname
+            generate_client_serv_time_distribution(c, figure_name)
+            print(f"Histogram generated: {figure_name}")
 
     # Charts with Avg time on Y, Request Rate on X, Same file Size, Same Lat, Same Homog, All Algs
     for homog in HOMOG_OPTIONS:
