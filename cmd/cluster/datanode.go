@@ -113,6 +113,7 @@ func (d *dataNode) Listen() {
 		duration:     0,
 		size:         0,
 		avgRT:        d.avgRT,
+		activeReq:    d.requestCtr,
 	})
 
 	d.log.Info(
@@ -162,6 +163,7 @@ func (d *dataNode) Listen() {
 		duration:     0,
 		size:         0,
 		avgRT:        d.avgRT,
+		activeReq:    d.requestCtr,
 	})
 }
 
@@ -230,6 +232,7 @@ func (d *dataNode) handleUserJoin(req *request) error {
 		duration:     uint64(time.Since(*ts).Nanoseconds()),
 		size:         uint64(n),
 		avgRT:        d.avgRT,
+		activeReq:    d.requestCtr,
 	})
 
 	return nil
@@ -266,5 +269,6 @@ func (d *dataNode) healthCheckReport(srvStartTime *time.Time) {
 		duration:     uint64(time.Since(ts).Nanoseconds()),
 		size:         uint64(n),
 		avgRT:        d.avgRT,
+		activeReq:    d.requestCtr,
 	})
 }
