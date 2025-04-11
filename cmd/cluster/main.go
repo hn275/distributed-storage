@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/hn275/distributed-storage/internal"
 	"github.com/hn275/distributed-storage/internal/config"
@@ -51,14 +52,13 @@ func main() {
 
 	wg.Add(int(conf.Node))
 
-	const nsToMs = 1000000
-
 	for nodeID := uint16(0); nodeID < conf.Node; nodeID++ {
 		go func(nodeIndex uint16) {
 
-			overHeadParam := int64(0)
+			overHeadParam := time.Duration(0)
 			if !globConf.Experiment.Homogeneous {
-				overHeadParam = rand.Int63n(globConf.Experiment.OverheadParam) * nsToMs
+				overHeadParam = time.Millisecond * time.Duration(rand.Int63n(globConf.Experiment.OverheadParam))
+				slog.Info("sleep timer", "v", overHeadParam)
 			}
 
 			node, err := nodeInitialize(lbNodeAddr, nodeID, tel, overHeadParam, conf.Capacity)

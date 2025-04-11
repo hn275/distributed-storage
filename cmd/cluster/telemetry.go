@@ -38,7 +38,7 @@ var eventHeaders = []string{
 // telemetry
 type event struct {
 	nodeID       uint16
-	nodeOverhead int64
+	nodeOverhead time.Duration
 	eventType    eventType
 	peer         peerType
 	timestamp    time.Time
@@ -52,7 +52,7 @@ type event struct {
 func (e *event) Row() []string {
 	return []string{
 		fmt.Sprintf("%d", e.nodeID),
-		fmt.Sprintf("%d", e.nodeOverhead),
+		fmt.Sprintf("%d", e.nodeOverhead.Milliseconds()),
 		string(e.eventType),
 		string(e.peer),
 		fmt.Sprintf("%d", e.timestamp.UnixNano()),

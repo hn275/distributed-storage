@@ -26,9 +26,9 @@ type dataNode struct {
 	net.Conn
 
 	id            uint16
-	avgRT         float64 // average response time, in nanoseconds
-	requestCtr    uint64  // num of requests served
-	overHeadParam int64   // overhead in nano seconds, this is for sleep
+	avgRT         float64       // average response time, in nanoseconds
+	requestCtr    uint64        // num of requests served
+	overHeadParam time.Duration // overhead in ms seconds, this is for sleep
 
 	log  *slog.Logger
 	tel  *telemetry.Telemetry
@@ -50,7 +50,7 @@ func (d *dataNode) Write(buf []byte) (int, error) {
 
 func nodeInitialize(
 	lbAddr string, nodeID uint16, t *telemetry.Telemetry,
-	overHeadParam int64, capacity uint16,
+	overHeadParam time.Duration, capacity uint16,
 ) (*dataNode, error) {
 	laddr, err := net.ResolveTCPAddr(network.ProtoTcp4, randomLocalPort)
 	if err != nil {
@@ -141,10 +141,12 @@ func (d *dataNode) Listen() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
+
 				req := &request{buf, time.Now()}
 				if err := d.pool.Process(req); err != nil {
 					d.log.Error("failed to service request.", "err", err.(error))
 				}
+
 				d.tel.Collect(&event{
 					nodeID:       d.id,
 					nodeOverhead: d.overHeadParam,
@@ -186,7 +188,7 @@ func (d *dataNode) handleUserJoin(req *request) error {
 	buf, ts := req.msg, &req.timeStart
 	defer d.healthCheckReport(ts)
 
-	time.Sleep(time.Nanosecond * time.Duration(d.overHeadParam))
+	time.Sleep(d.overHeadParam)
 
 	// dial user's listener
 	userAddr, err := network.BytesToAddr(buf[1:7])
