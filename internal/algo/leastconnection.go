@@ -42,3 +42,8 @@ func (lc *LeastConnection) Fix(i int) error {
 	heap.Fix(&lc.priorityQueue, i)
 	return nil
 }
+
+// LeastConnection implements LBAlgo
+func (lc *LeastConnection) Queue() []QueueNode {
+	return lc.priorityQueue
+}

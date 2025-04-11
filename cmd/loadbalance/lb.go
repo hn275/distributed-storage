@@ -13,40 +13,6 @@ import (
 	"github.com/hn275/distributed-storage/internal/telemetry"
 )
 
-const (
-	eventUserJoin    = "user-joined"
-	eventNodeJoin    = "node-joined"
-	eventPortForward = "port-forward"
-	eventHealthCheck = "health-check"
-
-	peerUser     = "user"
-	peerDataNode = "node"
-)
-
-var csvheaders = []string{
-	"event-type", "peer", "node-id", "timestamp", "duration(ns)", "avgRT(ns)",
-}
-
-type event struct {
-	eType     string
-	peer      string
-	peerID    int32
-	timestamp time.Time
-	duration  int64
-	avgRT     float64
-}
-
-func (e *event) Row() []string {
-	return []string{
-		e.eType,
-		e.peer,
-		fmt.Sprintf("%d", e.peerID),
-		fmt.Sprintf("%d", e.timestamp.UnixNano()),
-		fmt.Sprintf("%d", e.duration),
-		fmt.Sprintf("%f", e.avgRT),
-	}
-}
-
 type loadBalancer struct {
 	net.Listener
 	engine algo.LBAlgo
@@ -142,7 +108,7 @@ func (lb *loadBalancer) userJoinHandler(user net.Conn, buf []byte) error {
 	}
 
 	nodeQ := node.(*dataNode)
-	nodeQ.requests += 1
+	nodeQ.requestCtr += 1
 
 	// port fowarding
 	nodeQ.write(buf[:])
@@ -156,6 +122,8 @@ func (lb *loadBalancer) userJoinHandler(user net.Conn, buf []byte) error {
 		timestamp: ts,
 		duration:  time.Since(ts).Nanoseconds(),
 		avgRT:     nodeQ.avgRT,
+		activeReq: nodeQ.requestCtr,
+		queue:     makeQueueString(lb),
 	})
 
 	return err
@@ -182,6 +150,8 @@ func (lb *loadBalancer) nodeJoinHandler(node net.Conn, msg []byte) error {
 		timestamp: ts,
 		duration:  time.Since(ts).Nanoseconds(),
 		avgRT:     dataNode.avgRT,
+		activeReq: dataNode.requestCtr,
+		queue:     "",
 	})
 
 	return nil

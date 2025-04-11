@@ -14,6 +14,7 @@ type LBAlgo interface {
 	GetNode() (QueueNode, error)
 	PutNode(QueueNode)
 	Fix(int) error
+	Queue() []QueueNode
 }
 
 type QueueNode interface {

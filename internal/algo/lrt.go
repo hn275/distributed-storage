@@ -42,3 +42,8 @@ func (lrt *LeastResponseTime) Fix(i int) error {
 	heap.Fix(&lrt.priorityQueue, i)
 	return nil
 }
+
+// LeastResponseTime implements LBAlgo
+func (lrt *LeastResponseTime) Queue() []QueueNode {
+	return lrt.priorityQueue
+}
