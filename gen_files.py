@@ -19,6 +19,7 @@ USER_DIR = "tmp/output/user"
 LB_DIR = "tmp/output/lb"
 CLUSTER_DIR = "tmp/output/cluster"
 DATANODE_COUNT = 20
+CLUSTER_CAPACITY = 20
 
 def write_random_numbers(filename="output.txt"):
     with open(filename, "w") as file:
@@ -67,6 +68,7 @@ def gen_config(name, algo, homog, latency, interval, files):
              f"\n" + \
              f"cluster:\n" + \
              f"  node: {DATANODE_COUNT}\n" + \
+             f"  capacity: {CLUSTER_CAPACITY}\n" + \
              f"\n" + \
              f"load-balancer:\n" + \
              f"  algo: {algo}\n" + \
