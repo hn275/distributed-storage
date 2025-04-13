@@ -12,7 +12,7 @@ services:
         if [ ! -z "${LATENCY}" ]; then
           apt-get update && apt-get install -y iproute2
           tc qdisc add dev lo root netem delay "${LATENCY}ms"
-          tc qdisc change dev lo root pfifo limit 10000
+          tc qdisc show dev lo
         fi
         ./runsim.sh
       '
