@@ -1,0 +1,21 @@
+user:
+  small: 70
+  medium: 59
+  large: 71
+  x-large: 0
+  xx-large: 0
+  interval: 20
+
+cluster:
+  node: 10
+  capacity: 5
+
+load-balancer:
+  algo: simple-round-robin
+  local-port: 8000
+
+experiment:
+  name: exp-rr-lat-25-homog-true-int-20-fsz-v-rate-10
+  latency: 25
+  homogeneous: true
+  overhead-param: 1000

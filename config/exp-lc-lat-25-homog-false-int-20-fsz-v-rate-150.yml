@@ -1,0 +1,21 @@
+user:
+  small: 959
+  medium: 1017
+  large: 1024
+  x-large: 0
+  xx-large: 0
+  interval: 20
+
+cluster:
+  node: 10
+  capacity: 5
+
+load-balancer:
+  algo: least-connections
+  local-port: 8000
+
+experiment:
+  name: exp-lc-lat-25-homog-false-int-20-fsz-v-rate-150
+  latency: 25
+  homogeneous: false
+  overhead-param: 1000
