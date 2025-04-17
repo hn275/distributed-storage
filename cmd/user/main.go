@@ -145,6 +145,7 @@ func runSim(fileHash string, wg *sync.WaitGroup, clientIdx int, interval uint32,
 	defer wg.Done()
 
 	// sleep for a random number of seconds in [0, interval]
+	rand.Seed(int64(clientIdx))
 	sleepDuration := time.Duration(rand.Float32()*float32(interval)) * time.Second
 
 	ctx, cancel := context.WithTimeout(context.Background(), simDeadLine)
