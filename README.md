@@ -68,5 +68,4 @@ For more usage, see the [docs](https://pkg.go.dev/cmd/gofmt) for `gofmt`.
   - directly connect to the users for the data transfer.
   - encryption added, but set with a flag.
   - updating states to LB.
-  - can simulate server work with `sleep`.
-  - node leaving, needs to communicate with the LB.
+  - can simulate heterogeneous servers with `sleep`.
