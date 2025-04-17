@@ -57,7 +57,21 @@ func main() {
 
 			overHeadParam := time.Duration(0)
 			if !globConf.Experiment.Homogeneous {
-				overHeadParam = time.Millisecond * time.Duration(rand.Int63n(globConf.Experiment.OverheadParam))
+				rand.Seed(int64(nodeIndex))
+
+				// For the sake of replicability and to ensure nodes are "heterogeneous" enough,
+				// we keep the first 10 nodes hardcoded for the heterogeneous case.
+				// If you want to change this behaviour, you need to modify these if statements
+				if nodeIndex < 3 {
+					overHeadParam = time.Millisecond * (10)
+				} else if nodeIndex < 6 {
+					overHeadParam = time.Millisecond * (500)
+				} else if nodeIndex < 10 {
+					overHeadParam = time.Millisecond * (900)
+				} else {
+					overHeadParam = time.Millisecond * time.Duration(rand.Int63n(globConf.Experiment.OverheadParam))
+				}
+
 				slog.Info("sleep timer", "v", overHeadParam)
 			}
 

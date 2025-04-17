@@ -13,19 +13,13 @@ ALG_OPTIONS = (("rr", "simple-round-robin"), ("lc", "least-connections"), ("lrt"
 HOMOG_OPTIONS = (True, False)
 INTERVAL = 20
 FILE_SZ = ("s", "m", "l", "v") # be sure that v is always the final element
-RATES = (10, 32, 100, 320, 500)
-LATENCY_OPTIONS = (0, 100)
+RATES = (10, 50, 100, 150, 200)
+LATENCY_OPTIONS = (0, 25)
 USER_DIR = "tmp/output/user"
 LB_DIR = "tmp/output/lb"
 CLUSTER_DIR = "tmp/output/cluster"
-DATANODE_COUNT = 20
-CLUSTER_CAPACITY = 20
-
-def write_random_numbers(filename="output.txt"):
-    with open(filename, "w") as file:
-        for _ in range(100):
-            num = random.randint(0, 1000)
-            file.write(f"{num},256\n")
+DATANODE_COUNT = 10
+CLUSTER_CAPACITY = 5
 
 class ClientExp:
     def __init__(self, alg, fname= None, net_delay=None, homog=None, interval=None, fsz=None, fsz_bytes=None, rate=None, avg_serv_time=None, errors=None, values=None):
@@ -109,7 +103,7 @@ def generate_configs(opt):
                 for f_sz in FILE_SZ:
                     for rate in RATES: # requests/sec
                         if ((latency == LATENCY_OPTIONS[0] and homog == False and f_sz == "v" and opt == "configs1") or
-                            (latency == LATENCY_OPTIONS[1] and homog == False and f_sz == "v" and opt == "configs2")):
+                            (latency == LATENCY_OPTIONS[1] and f_sz == "v" and opt == "configs2")):
                             name = f"exp-{algo[0]}-lat-{latency}-homog-{str(homog).lower()}-int-{INTERVAL}-fsz-{f_sz}-rate-{rate}"
                             requests = varying_fsz_with_fixed_amount[rate] if f_sz == "v" else get_requests(rate, INTERVAL, f_sz)
                             config = gen_config(name, algo[1], homog, latency, INTERVAL, requests)
@@ -178,7 +172,7 @@ def generate_client_serv_time_distribution(client_exp, figure_name):
     save_dir = "tmp/output/client-distributions"
     os.makedirs(save_dir, exist_ok=True)
 
-    plt.hist(client_exp.values, 20)
+    plt.hist(client_exp.values, 50, color='skyblue')
     plt.title(f"{get_alg_string(client_exp.alg)}: Service Time Distribution", pad = 20)
     plt.ylabel("Frequency")
     plt.xlabel('Service Time (sec)')
@@ -529,20 +523,20 @@ def generate_requests_per_node():
 def main():
     if (len(sys.argv) != 2):
         print("Error: invalid number of command arguments")
-        print("Usage: `python3 gen_files.py <opt>` where <opt> can be one of `user`, `lb`, `cluster`, `configs1`, or `configs2`")
+        print("Usage: `python3 gen_files.py <opt>` where <opt> can be one of `user`, `cluster`, `configs1`, or `configs2`")
+        print("Note: To generate configs used in project experiments, use `configs2` option")
         sys.exit(1)
     
     if sys.argv[1] == "user":
         generate_user_plots()
     elif sys.argv[1] == "configs1" or sys.argv[1] == "configs2":
         generate_configs(sys.argv[1])
-    elif sys.argv[1] == "lb":
-        generate_lb_data()
     elif sys.argv[1] == "cluster":
         generate_requests_per_node()
     else:
         print("Error: invalid option given")
-        print("Usage: `python3 gen_files.py <opt>` where opt can be one of `user`, `lb`, `cluster`, `configs1`, or `configs2`")
+        print("Usage: `python3 gen_files.py <opt>` where opt can be one of `user`, `cluster`, `configs1`, or `configs2`")
+        print("Note: To generate configs used in project experiments, use `configs2` option")
         sys.exit(1)
 
 
