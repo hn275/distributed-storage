@@ -1,4 +1,4 @@
-name: CI
+name: Go Module Checker
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
 
 jobs:
   ci:
-    name: Code Validation
+    name: Go Code Validation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
