@@ -1,0 +1,28 @@
+name: Python Module Checker
+
+on:
+  push:
+
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  ci:
+    name: Python Script Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13.3"
+
+      - name: requirements.txt validation
+        run: pip install -r requirements.txt
+
+      - name: install formatter black
+        run: pip install black
+
+      - name: format checker
+        run: |
+          black --check -v --diff --color . || echo "format python files with 'black .'"
