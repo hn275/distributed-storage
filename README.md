@@ -67,7 +67,9 @@ While the simulation can be run manually using `./runsim.sh`, we recommend
 using Docker and Docker Compose to automate code compilation, dependency
 management, simulation execution, and network topology initialization.
 
-To run the simulation with 25 ms of emulated network latency:
+An optional environment variable `LATENCY` can be passed in to emulate network
+latency, the value is a integer in the unit of milliseconds. For example-to
+run the simulation with 25ms of network latency:
 
 ```sh
 LATENCY=25 docker compose up --build
