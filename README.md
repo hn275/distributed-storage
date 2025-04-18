@@ -1,29 +1,99 @@
 # distributed-storage
 
-An ongoing reseach project, focusing on perfomance analysis of various load
-balancing techniques in a P2P system.
+A reseach project, focusing on perfomance analysis of various load balancing
+techniques in a P2P system.
+
+For details of our analysis, see [report.pdf](./report.pdf).
 
 # Simulation
 
-For the simulation, we will use Docker and docker-compose to automate the code
-compilation and initialization of the required network topology processes.
-
-TODO: redo docker compose and update the docs
-
-# Development
-
 ## File Data
 
-Before running the simulation, the file data can be generated with the
-`data-gen` executable:
+If you're running the simulation in a Docker environment, this step can be
+safely skipped. Proceed directly to the [Docker Container](#docker-container)
+section.
+
+For bare-metal execution, the simulation data must first be generated using
+the `data-gen` executable:
 
 ```sh
 go run ./cmd/data-gen
 ```
 
-This script will create a dir entry `tmp/data`, and 6 files of different size
-for the simulation. The entire `tmp` directory is added to `.gitignore`, since
-the generated files can be as large as 1Gb.
+This will create a `./tmp/data` directory and populate it with six files of
+varying sizes used in the simulation. The entire `./tmp` directory is included
+in `.gitignore`, as the generated data can total up to 1 GB.
+
+## Bare Metal
+
+Bare-metal execution **is only supported on Unix environment**, and is not
+recommended due to the additional tooling required. At minimum, compatible Go
+compiler and Python interpreter must be installed and properly configured. See
+[Environment](#environment) for details.
+
+### Go Module
+
+The required binaries must be compiled and placed in `./tmp/bin/`. This can be
+done using the provided `make` rule:
+
+```sh
+make compile
+```
+
+As noted in the section [File Data](#file-data), ensure the mock data is
+generated before running the simulation.
+
+### Python Module
+
+To generate graphs and perform the necessary analysis, install the Python
+dependencies:
+
+```sh
+pip install -r requirements.txt
+```
+
+### Execution
+
+With the binaries compiled and Python modules installed, the simulation can be
+executed using:
+
+```sh
+./runsim.sh
+```
+
+## Docker Container
+
+While the simulation can be run manually using `./runsim.sh`, we recommend
+using Docker and Docker Compose to automate code compilation, dependency
+management, simulation execution, and network topology initialization.
+
+To run the simulation with 25 ms of emulated network latency:
+
+```sh
+LATENCY=25 docker compose up --build
+```
+
+> **Note:** Use the `--build` flag only after making any code changes to
+> trigger recompilation.
+
+Simulation output is mounted to two directories: logs are stored in `./log/`,
+and telemetry data is saved in `./output/`. Depending on your system’s Docker
+group permissions, you may need to change ownership of these directories to
+access the output:
+
+```sh
+sudo chown <owner>:<group> -R ./output/ ./log/
+```
+
+# Development
+
+## Environment
+
+This project was developed and tested using the following versions:
+
+- Go 1.24.2
+- Python 3.13.3
+- GNU Make 4.4.1
 
 ## Project Directory Structure
 
@@ -33,39 +103,8 @@ the generated files can be as large as 1Gb.
 | Private packages | `./internal/<binary-name>/`  |
 | Shared packages  | `./internal/<package-name>/` |
 
-## CI/CI: Code Validation
+## CI/CD
 
-A [CI/Code Validation](./.github/workflows/ci.yml) pipeline is set up for code
-validation when a PR is opened. The action is required to complete without
-errors before the PR can be pulled into `main`.
-
-### Code Formatting
-
-In the case the the action failed because your code isn't formatted, use `gofmt`
-
-```sh
-# to format all files
-gofmt -w .
-
-# or to format a specific file
-gofmt -w ./path/to/file
-```
-
-For more usage, see the [docs](https://pkg.go.dev/cmd/gofmt) for `gofmt`.
-
-# Requirements
-
-- User Interface
-  - simple, hard code binary to simulate sending an arbituary number requests.
-- Load Balancing
-  - supported multiple algorithms, but start with one
-  - have an interface so different algorithms can just be plugged and play
-    - can be stateful, different algos can have different struct type, etc etc
-    - internal state processing
-- Data Node
-  - no communication needed between data nodes.
-  - all nodes have the same data.
-  - directly connect to the users for the data transfer.
-  - encryption added, but set with a flag.
-  - updating states to LB.
-  - can simulate heterogeneous servers with `sleep`.
+Two pipelines are configured to ensure dependency validity and consistent code
+formatting. Both must pass before any pull request can be merged into the
+`main` branch.
